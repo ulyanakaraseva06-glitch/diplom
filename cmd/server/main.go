@@ -25,20 +25,21 @@ func main() {
     defer database.Close()
 
     // Инициализация репозиториев
-    userRepo := repository.NewUserRepository(database)
-    tournamentRepo := repository.NewTournamentRepository(database)
-    registrationRepo := repository.NewRegistrationRepository(database)
-    banRepo := repository.NewBanRepository(database)
-    supportRepo := repository.NewSupportRepository(database)
+userRepo := repository.NewUserRepository(database)
+tournamentRepo := repository.NewTournamentRepository(database)
+registrationRepo := repository.NewRegistrationRepository(database)
+banRepo := repository.NewBanRepository(database)
+supportRepo := repository.NewSupportRepository(database)
+bracketRepo := repository.NewBracketRepository(database)  // добавить эту строку
 
-    // Инициализация хендлеров
-    authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
-    tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo)
-    registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
-    banHandler := handlers.NewBanHandler(banRepo, userRepo)
-    userHandler := handlers.NewUserHandler(userRepo)
-    supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
-
+// Инициализация хендлеров
+authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
+tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)  // добавить bracketRepo
+registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
+banHandler := handlers.NewBanHandler(banRepo, userRepo)
+supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
+userHandler := handlers.NewUserHandler(userRepo)
+   
     // Создание роутера
     r := mux.NewRouter()
 
@@ -79,6 +80,11 @@ func main() {
     api.HandleFunc("/support/{user_id:[0-9]+}/unread", supportHandler.GetUnreadCount).Methods("GET", "OPTIONS")
     api.HandleFunc("/support/{user_id:[0-9]+}/read", supportHandler.MarkAsRead).Methods("POST", "OPTIONS")
     api.HandleFunc("/tournaments/{id:[0-9]+}/details", tournamentHandler.GetTournamentWithRegistrations).Methods("GET", "OPTIONS")
+    
+
+
+    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.SaveBracket).Methods("POST", "OPTIONS")
+    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.GetBracket).Methods("GET", "OPTIONS")
 
     // Маршруты только для менеджеров
     admin := api.PathPrefix("/admin").Subrouter()
@@ -86,6 +92,8 @@ func main() {
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.UpdateTournament).Methods("PUT", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.DeleteTournament).Methods("DELETE", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}/approve", tournamentHandler.ApproveTournament).Methods("POST", "OPTIONS")
+
+
 
     // Блокировки
     admin.HandleFunc("/bans", banHandler.ListActiveBans).Methods("GET", "OPTIONS")

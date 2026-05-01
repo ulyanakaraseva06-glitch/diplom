@@ -16,18 +16,21 @@ import (
 type TournamentHandler struct {
     tournamentRepo   *repository.TournamentRepository
     userRepo         *repository.UserRepository
-    registrationRepo *repository.RegistrationRepository  // добавь эту строку
+    registrationRepo *repository.RegistrationRepository
+    bracketRepo      *repository.BracketRepository  // добавить
 }
 
 func NewTournamentHandler(
     tournamentRepo *repository.TournamentRepository,
     userRepo *repository.UserRepository,
-    registrationRepo *repository.RegistrationRepository,  // добавь параметр
+    registrationRepo *repository.RegistrationRepository,
+    bracketRepo *repository.BracketRepository,
 ) *TournamentHandler {
     return &TournamentHandler{
         tournamentRepo:   tournamentRepo,
         userRepo:         userRepo,
-        registrationRepo: registrationRepo,  // добавь инициализацию
+        registrationRepo: registrationRepo,
+        bracketRepo:      bracketRepo,
     }
 }
 
@@ -335,6 +338,95 @@ func (h *TournamentHandler) GetTournamentWithRegistrations(w http.ResponseWriter
         "organizer":            organizer.ToResponse(),
         "participants":         participants,
         "created_at":           tournament.CreatedAt,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}
+
+// SaveBracket - сохранение сетки турнира
+func (h *TournamentHandler) SaveBracket(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Invalid tournament ID", http.StatusBadRequest)
+        return
+    }
+
+    var req struct {
+        Matches []struct {
+            ID       string  `json:"id"`
+            Team1Id  *int    `json:"team1Id"`
+            Team2Id  *int    `json:"team2Id"`
+            WinnerId *int    `json:"winnerId"`
+            NextMatchId string `json:"nextMatchId"`
+            Round    int     `json:"round"`
+            Position int     `json:"position"`
+        } `json:"matches"`
+        ChampionId *int `json:"championId"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Конвертируем в формат репозитория
+    var matches []repository.BracketMatch
+    for _, m := range req.Matches {
+        matches = append(matches, repository.BracketMatch{
+            MatchID:     m.ID,
+            Team1ID:     m.Team1Id,
+            Team2ID:     m.Team2Id,
+            WinnerID:    m.WinnerId,
+            NextMatchID: m.NextMatchId,
+            RoundNumber: m.Round,
+            Position:    m.Position,
+        })
+    }
+
+    err = h.bracketRepo.SaveBracket(r.Context(), id, matches, req.ChampionId)
+    if err != nil {
+        http.Error(w, "Failed to save bracket: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Bracket saved successfully"})
+}
+
+// GetBracket - получение сохранённой сетки турнира
+func (h *TournamentHandler) GetBracket(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Invalid tournament ID", http.StatusBadRequest)
+        return
+    }
+
+    matches, championID, err := h.bracketRepo.LoadBracket(r.Context(), id)
+    if err != nil {
+        http.Error(w, "Failed to load bracket: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Конвертируем обратно в формат для фронтенда
+    var responseMatches []map[string]interface{}
+    for _, m := range matches {
+        responseMatches = append(responseMatches, map[string]interface{}{
+            "id":           m.MatchID,
+            "team1Id":      m.Team1ID,
+            "team2Id":      m.Team2ID,
+            "winnerId":     m.WinnerID,
+            "nextMatchId":  m.NextMatchID,
+            "round":        m.RoundNumber,
+            "position":     m.Position,
+        })
+    }
+
+    response := map[string]interface{}{
+        "matches":    responseMatches,
+        "championId": championID,
     }
 
     w.Header().Set("Content-Type", "application/json")

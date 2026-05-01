@@ -16,12 +16,17 @@ import (
     "github.com/gorilla/websocket"
 )
 
+type Client struct {
+    Conn *websocket.Conn
+    Role string
+}
+
 type SupportHandler struct {
     supportRepo *repository.SupportRepository
     userRepo    *repository.UserRepository
     jwtSecret   string
     upgrader    websocket.Upgrader
-    clients     map[int]*websocket.Conn
+    clients     map[int]*Client
     clientsMux  sync.RWMutex
 }
 
@@ -35,7 +40,7 @@ func NewSupportHandler(supportRepo *repository.SupportRepository, userRepo *repo
                 return true
             },
         },
-        clients: make(map[int]*websocket.Conn),
+        clients: make(map[int]*Client),
     }
 }
 
@@ -53,8 +58,6 @@ func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
-
-    _, _ = middleware.GetUserRole(r.Context()) // временно игнорируем
 
     var req models.SupportMessageCreate
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -84,7 +87,7 @@ func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
     // Отправляем через WebSocket если пользователь онлайн
     h.clientsMux.RLock()
-    conn, ok := h.clients[userID]
+    client, ok := h.clients[userID]
     h.clientsMux.RUnlock()
 
     if ok {
@@ -104,7 +107,7 @@ func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
             "manager_name":  managerName,
             "username":      managerName,
         }
-        conn.WriteJSON(response)
+        client.Conn.WriteJSON(response)
     }
 
     w.Header().Set("Content-Type", "application/json")
@@ -156,11 +159,11 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
     var response []map[string]interface{}
     for _, msg := range messages {
         item := map[string]interface{}{
-            "id":            msg.ID,
-            "user_id":       msg.UserID,
-            "message":       msg.Message,
-            "is_from_user":  msg.IsFromUser,
-            "is_read":       msg.IsRead,
+            "id":           msg.ID,
+            "user_id":      msg.UserID,
+            "message":      msg.Message,
+            "is_from_user": msg.IsFromUser,
+            "is_read":      msg.IsRead,
             "created_at":   msg.CreatedAt,
         }
 
@@ -172,7 +175,6 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
                 item["username"] = manager.Username
             }
         } else {
-            // Пользовательское сообщение
             user, err := h.userRepo.FindByID(r.Context(), msg.UserID)
             if err == nil && user != nil {
                 item["username"] = user.Username
@@ -251,8 +253,6 @@ func (h *SupportHandler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
 }
 
 // WebSocket - WebSocket соединение для чата в реальном времени
-// WebSocket - WebSocket соединение для чата в реальном времени
-// WebSocket - WebSocket соединение для чата в реальном времени
 func (h *SupportHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
     userIDStr := r.URL.Query().Get("user_id")
     if userIDStr == "" {
@@ -306,7 +306,7 @@ func (h *SupportHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
     }
 
     h.clientsMux.Lock()
-    h.clients[userID] = conn
+    h.clients[userID] = &Client{Conn: conn, Role: role}
     h.clientsMux.Unlock()
 
     log.Printf("WebSocket: user_id=%d connected", userID)
@@ -351,17 +351,47 @@ func (h *SupportHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
             continue
         }
 
-        // Отправляем всем подключённым (кроме отправителя)
+        // Формируем ответ
+        senderName := ""
+        if role == "manager" {
+            manager, _ := h.userRepo.FindByID(r.Context(), int(tokenUserID))
+            if manager != nil {
+                senderName = manager.Username
+            }
+        } else {
+            user, _ := h.userRepo.FindByID(r.Context(), userID)
+            if user != nil {
+                senderName = user.Username
+            }
+        }
+
+        response := map[string]interface{}{
+            "id":           message.ID,
+            "user_id":      userID,
+            "message":      msg.Message,
+            "is_from_user": isFromUser,
+            "is_read":      false,
+            "created_at":   message.CreatedAt,
+            "username":     senderName,
+        }
+
+        if role == "manager" {
+            response["manager_name"] = senderName
+        }
+
+        // Отправляем сообщение
         h.clientsMux.RLock()
-        for id, clientConn := range h.clients {
-            if id != userID {
-                clientConn.WriteJSON(map[string]interface{}{
-                    "id":           message.ID,
-                    "user_id":      userID,
-                    "message":      msg.Message,
-                    "is_from_user": isFromUser,
-                    "created_at":   message.CreatedAt,
-                })
+        if role == "manager" {
+            // Менеджер пишет игроку → отправляем только игроку
+            if client, ok := h.clients[userID]; ok {
+                client.Conn.WriteJSON(response)
+            }
+        } else {
+            // Игрок пишет → отправляем всем менеджерам
+            for id, client := range h.clients {
+                if id != userID && client.Role == "manager" {
+                    client.Conn.WriteJSON(response)
+                }
             }
         }
         h.clientsMux.RUnlock()
