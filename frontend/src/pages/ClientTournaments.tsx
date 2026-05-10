@@ -18,10 +18,17 @@ import {
   AppBar,
   Toolbar,
   IconButton,
+  Menu,
+  MenuItem,
+  Avatar,
 } from '@mui/material';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import ChatIcon from '@mui/icons-material/Chat';
+import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
+import PeopleIcon from '@mui/icons-material/People';
 
 interface Tournament {
   id: number;
@@ -40,6 +47,7 @@ const ClientTournaments: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [registering, setRegistering] = useState<number | null>(null);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   
   // Гость — если нет токена и нет user в localStorage
   const isGuest = !isAuthenticated && !localStorage.getItem('token');
@@ -95,16 +103,47 @@ const ClientTournaments: React.FC = () => {
   };
 
   const handleLogout = () => {
+    handleMenuClose();
     logout();
     navigate('/client/tournaments');
   };
 
   const handleAdminPanel = () => {
+    handleMenuClose();
     navigate('/dashboard');
   };
 
   const handleLogin = () => {
     navigate('/login');
+  };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleMessenger = () => {
+    // TODO: переход на страницу мессенджера
+    alert('Страница мессенджера в разработке');
+  };
+
+  const handleSubscription = () => {
+    // TODO: переход на страницу подписки
+    alert('Страница подписки в разработке');
+  };
+
+  const handleFriends = () => {
+    // TODO: переход на страницу друзей
+    alert('Страница друзей в разработке');
+  };
+
+  const handleProfile = () => {
+    handleMenuClose();
+    // TODO: переход на страницу профиля
+    alert('Страница профиля в разработке');
   };
 
   if (loading) {
@@ -129,17 +168,57 @@ const ClientTournaments: React.FC = () => {
             </Button>
           ) : isAuthenticated ? (
             <>
-              <Typography variant="body2" sx={{ mr: 2 }}>
-                {user?.username} ({user?.role === 'manager' ? 'Админ' : user?.role === 'organizer' ? 'Организатор' : 'Игрок'})
-              </Typography>
+              {/* Кнопка Мессенджер */}
+              <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
+                Мессенджер
+              </Button>
+              
+              {/* Кнопка Подписка */}
+              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
+                Подписка
+              </Button>
+              
+              {/* Кнопка Друзья */}
+              <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
+                Друзья
+              </Button>
+              
+              {/* Кнопка Админ-панель (только для менеджеров) */}
               {user?.role === 'manager' && (
-                <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 1 }}>
+                <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 2 }}>
                   Админ-панель
                 </Button>
               )}
-              <IconButton color="inherit" onClick={handleLogout}>
-                <LogoutIcon />
-              </IconButton>
+              
+              {/* Выпадающее меню профиля */}
+              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
+                <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </Avatar>
+                <Typography variant="body2" sx={{ mr: 1 }}>
+                  {user?.username}
+                </Typography>
+              </Box>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+              >
+                <MenuItem onClick={handleProfile}>
+                  <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
+                </MenuItem>
+                <MenuItem onClick={handleLogout}>
+                  <LogoutIcon sx={{ mr: 1 }} /> Выйти
+                </MenuItem>
+              </Menu>
             </>
           ) : null}
         </Toolbar>
