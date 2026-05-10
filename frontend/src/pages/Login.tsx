@@ -9,6 +9,7 @@ import {
   Typography,
   Box,
   Alert,
+  Divider,
 } from '@mui/material';
 
 const Login: React.FC = () => {
@@ -26,12 +27,21 @@ const Login: React.FC = () => {
 
     try {
       await login({ email, password });
-      navigate('/dashboard');
+      // После успешного входа перенаправляем на клиентскую страницу
+      // Дальше уже useAuth подскажет роль
+      navigate('/client/tournaments');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ошибка входа');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestLogin = () => {
+    // Гость — просто переходим на страницу, без сохранения токена
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/client/tournaments');
   };
 
   return (
@@ -78,6 +88,17 @@ const Login: React.FC = () => {
               {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
+          
+          <Divider sx={{ my: 3 }}>или</Divider>
+          
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={handleGuestLogin}
+            sx={{ mb: 2 }}
+          >
+            Войти как гость
+          </Button>
           
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2">

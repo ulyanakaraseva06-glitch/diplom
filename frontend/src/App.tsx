@@ -10,11 +10,13 @@ import Registrations from './pages/Registrations';
 import Bans from './pages/Bans';
 import Support from './pages/Support';
 import TournamentDetails from './pages/TournamentDetails';
+import ClientTournaments from './pages/ClientTournaments';
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+// Защищённый маршрут только для менеджеров
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   if (isLoading) {
     return <div>Загрузка...</div>;
@@ -22,6 +24,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
+  }
+  
+  if (user?.role !== 'manager') {
+    return <Navigate to="/client/tournaments" />;
   }
   
   return <>{children}</>;
@@ -33,40 +39,44 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            {/* Публичные маршруты */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             
-            <Route path="/" element={<Navigate to="/dashboard" />} />
+            {/* Клиентский модуль (доступен всем) */}
+            <Route path="/" element={<Navigate to="/client/tournaments" />} />
+            <Route path="/client/tournaments" element={<ClientTournaments />} />
+            
+            {/* Административная панель (только для менеджеров) */}
             <Route path="/dashboard" element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <Dashboard />
-              </ProtectedRoute>
-            } />
-            // внутри Routes добавь:
-            <Route path="/tournaments/:id" element={
-              <ProtectedRoute>
-                <TournamentDetails />
-              </ProtectedRoute>
+              </AdminRoute>
             } />
             <Route path="/tournaments" element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <Tournaments />
-              </ProtectedRoute>
+              </AdminRoute>
+            } />
+            <Route path="/tournaments/:id" element={
+              <AdminRoute>
+                <TournamentDetails />
+              </AdminRoute>
             } />
             <Route path="/registrations" element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <Registrations />
-              </ProtectedRoute>
+              </AdminRoute>
             } />
             <Route path="/bans" element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <Bans />
-              </ProtectedRoute>
+              </AdminRoute>
             } />
             <Route path="/support" element={
-              <ProtectedRoute>
+              <AdminRoute>
                 <Support />
-              </ProtectedRoute>
+              </AdminRoute>
             } />
           </Routes>
         </AuthProvider>

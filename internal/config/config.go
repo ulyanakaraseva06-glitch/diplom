@@ -13,6 +13,8 @@ type Config struct {
     DBPassword string
     DBName     string
     JWTSecret  string
+    MongoURI    string
+    MongoDBName string
 }
 
 func Load() *Config {
@@ -27,7 +29,10 @@ func Load() *Config {
         DBUser:     getEnv("DB_USER", "postgres"),
         DBPassword: getEnv("DB_PASSWORD", "postgres"),
         DBName:     getEnv("DB_NAME", "esports_manager"),
+        MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
+        MongoDBName: getEnv("MONGO_DB_NAME", "kib_db"),
         JWTSecret:  getEnv("JWT_SECRET", "default-secret-key"),
+        
     }
 }
 

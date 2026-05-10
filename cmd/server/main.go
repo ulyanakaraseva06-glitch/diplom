@@ -1,6 +1,7 @@
 package main
 
 import (
+    "context"
     "log"
     "net/http"
 
@@ -8,7 +9,9 @@ import (
     "esports-manager/internal/db"
     "esports-manager/internal/handlers"
     "esports-manager/internal/middleware"
+    "esports-manager/internal/mongo"
     "esports-manager/internal/repository"
+    "esports-manager/internal/services"
 
     "github.com/gorilla/mux"
 )
@@ -17,29 +20,43 @@ func main() {
     // Загрузка конфигурации
     cfg := config.Load()
 
-    // Подключение к базе данных
+    // Подключение к PostgreSQL
     database, err := db.NewPostgresDB(cfg)
     if err != nil {
-        log.Fatalf("Failed to connect to database: %v", err)
+        log.Fatalf("Failed to connect to PostgreSQL: %v", err)
     }
     defer database.Close()
 
-    // Инициализация репозиториев
-userRepo := repository.NewUserRepository(database)
-tournamentRepo := repository.NewTournamentRepository(database)
-registrationRepo := repository.NewRegistrationRepository(database)
-banRepo := repository.NewBanRepository(database)
-supportRepo := repository.NewSupportRepository(database)
-bracketRepo := repository.NewBracketRepository(database)  // добавить эту строку
+    // Инициализация репозиториев PostgreSQL
+    userRepo := repository.NewUserRepository(database)
+    tournamentRepo := repository.NewTournamentRepository(database)
+    registrationRepo := repository.NewRegistrationRepository(database)
+    banRepo := repository.NewBanRepository(database)
+    supportRepo := repository.NewSupportRepository(database)
+    bracketRepo := repository.NewBracketRepository(database)
 
-// Инициализация хендлеров
-authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
-tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)  // добавить bracketRepo
-registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
-banHandler := handlers.NewBanHandler(banRepo, userRepo)
-supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
-userHandler := handlers.NewUserHandler(userRepo)
-   
+    // Подключение к MongoDB
+    mongoClient, err := mongo.NewMongoClient(cfg.MongoURI, cfg.MongoDBName)
+    if err != nil {
+        log.Fatalf("Failed to connect to MongoDB: %v", err)
+    }
+    defer mongoClient.Close()
+
+    // Синхронизация данных из PostgreSQL в MongoDB
+    syncService := services.NewSyncService(userRepo, tournamentRepo, mongoClient.Database)
+    if err := syncService.SyncAll(context.Background()); err != nil {
+        log.Printf("Warning: sync failed: %v", err)
+    }
+
+    // Инициализация хендлеров
+    authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
+    tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
+    registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
+    banHandler := handlers.NewBanHandler(banRepo, userRepo)
+    supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
+    userHandler := handlers.NewUserHandler(userRepo)
+    clientHandler := handlers.NewClientHandler(mongoClient.Database)
+
     // Создание роутера
     r := mux.NewRouter()
 
@@ -56,10 +73,19 @@ userHandler := handlers.NewUserHandler(userRepo)
 
     // WebSocket (не требует авторизации)
     r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
-
+    // Клиентские маршруты (публичные)
+    r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
+
+    // Маршруты для клиентского модуля (публичные)
+    
+
+    // Маршруты для клиентского модуля (требуют авторизации)
+    api.HandleFunc("/client/register", clientHandler.RegisterForTournament).Methods("POST", "OPTIONS")
+
+    // Маршруты для административного модуля
     api.HandleFunc("/admin/users", userHandler.ListUsers).Methods("GET", "OPTIONS")
     api.HandleFunc("/admin/users/{id:[0-9]+}", userHandler.GetUserByID).Methods("GET", "OPTIONS")
 
@@ -67,6 +93,9 @@ userHandler := handlers.NewUserHandler(userRepo)
     api.HandleFunc("/tournaments", tournamentHandler.ListTournaments).Methods("GET", "OPTIONS")
     api.HandleFunc("/tournaments", tournamentHandler.CreateTournament).Methods("POST", "OPTIONS")
     api.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.GetTournament).Methods("GET", "OPTIONS")
+    api.HandleFunc("/tournaments/{id:[0-9]+}/details", tournamentHandler.GetTournamentWithRegistrations).Methods("GET", "OPTIONS")
+    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.SaveBracket).Methods("POST", "OPTIONS")
+    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.GetBracket).Methods("GET", "OPTIONS")
 
     // Маршруты для заявок
     api.HandleFunc("/tournaments/{tournament_id:[0-9]+}/register", registrationHandler.RegisterForTournament).Methods("POST", "OPTIONS")
@@ -79,12 +108,6 @@ userHandler := handlers.NewUserHandler(userRepo)
     api.HandleFunc("/support/{user_id:[0-9]+}/messages", supportHandler.SendMessage).Methods("POST", "OPTIONS")
     api.HandleFunc("/support/{user_id:[0-9]+}/unread", supportHandler.GetUnreadCount).Methods("GET", "OPTIONS")
     api.HandleFunc("/support/{user_id:[0-9]+}/read", supportHandler.MarkAsRead).Methods("POST", "OPTIONS")
-    api.HandleFunc("/tournaments/{id:[0-9]+}/details", tournamentHandler.GetTournamentWithRegistrations).Methods("GET", "OPTIONS")
-    
-
-
-    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.SaveBracket).Methods("POST", "OPTIONS")
-    api.HandleFunc("/tournaments/{id:[0-9]+}/bracket", tournamentHandler.GetBracket).Methods("GET", "OPTIONS")
 
     // Маршруты только для менеджеров
     admin := api.PathPrefix("/admin").Subrouter()
@@ -92,8 +115,6 @@ userHandler := handlers.NewUserHandler(userRepo)
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.UpdateTournament).Methods("PUT", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.DeleteTournament).Methods("DELETE", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}/approve", tournamentHandler.ApproveTournament).Methods("POST", "OPTIONS")
-
-
 
     // Блокировки
     admin.HandleFunc("/bans", banHandler.ListActiveBans).Methods("GET", "OPTIONS")
