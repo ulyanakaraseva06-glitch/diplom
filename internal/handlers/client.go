@@ -5,6 +5,7 @@ import (
     "log"
     "net/http"
     "time"
+    "fmt"
 
     "esports-manager/internal/middleware"
     "esports-manager/internal/models"
@@ -261,4 +262,128 @@ func (h *ClientHandler) AddFriend(w http.ResponseWriter, r *http.Request) {
 
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(map[string]string{"message": "Friend added successfully"})
+}
+// GetSubscriptions - список доступных подписок
+func (h *ClientHandler) GetSubscriptions(w http.ResponseWriter, r *http.Request) {
+    cursor, err := h.mongoDB.Collection("subscriptions").Find(r.Context(), bson.M{})
+    if err != nil {
+        http.Error(w, "Failed to fetch subscriptions", http.StatusInternalServerError)
+        return
+    }
+    defer cursor.Close(r.Context())
+
+    var subscriptions []bson.M
+    if err = cursor.All(r.Context(), &subscriptions); err != nil {
+        http.Error(w, "Failed to decode subscriptions", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(subscriptions)
+}
+
+// GetUserSubscription - получить подписку пользователя
+func (h *ClientHandler) GetUserSubscription(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    var userSub models.UserSubscription
+    err := h.mongoDB.Collection("user_subscriptions").FindOne(r.Context(), bson.M{
+        "user_id": userID,
+        "is_active": true,
+    }).Decode(&userSub)
+    if err == mongo.ErrNoDocuments {
+        json.NewEncoder(w).Encode(nil)
+        return
+    }
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(userSub)
+}
+
+// Subscribe - оформление подписки
+func (h *ClientHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    var req struct {
+        SubscriptionID string `json:"subscription_id"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    // Проверяем существование подписки
+    var subscription models.Subscription
+    err := h.mongoDB.Collection("subscriptions").FindOne(r.Context(), bson.M{"id": req.SubscriptionID}).Decode(&subscription)
+    if err != nil {
+        http.Error(w, "Subscription not found", http.StatusNotFound)
+        return
+    }
+
+    // Деактивируем старые подписки пользователя
+    _, err = h.mongoDB.Collection("user_subscriptions").UpdateMany(
+        r.Context(),
+        bson.M{"user_id": userID, "is_active": true},
+        bson.M{"$set": bson.M{"is_active": false}},
+    )
+    if err != nil {
+        log.Printf("Failed to deactivate old subscriptions: %v", err)
+    }
+
+    // Создаём новую подписку
+    userSub := models.UserSubscription{
+        ID:             generateID(),
+        UserID:         userID,
+        SubscriptionID: req.SubscriptionID,
+        StartDate:      time.Now(),
+        EndDate:        time.Now().AddDate(0, 1, 0), // на 1 месяц
+        IsActive:       true,
+        AutoRenew:      false,
+    }
+
+    _, err = h.mongoDB.Collection("user_subscriptions").InsertOne(r.Context(), userSub)
+    if err != nil {
+        http.Error(w, "Failed to create subscription", http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Subscribed successfully"})
+}
+
+// CancelSubscription - отмена подписки
+func (h *ClientHandler) CancelSubscription(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    _, err := h.mongoDB.Collection("user_subscriptions").UpdateOne(
+        r.Context(),
+        bson.M{"user_id": userID, "is_active": true},
+        bson.M{"$set": bson.M{"is_active": false, "auto_renew": false}},
+    )
+    if err != nil {
+        http.Error(w, "Failed to cancel subscription", http.StatusInternalServerError)
+        return
+    }
+
+    json.NewEncoder(w).Encode(map[string]string{"message": "Subscription cancelled"})
+}
+
+func generateID() string {
+    return fmt.Sprintf("%d", time.Now().UnixNano())
 }

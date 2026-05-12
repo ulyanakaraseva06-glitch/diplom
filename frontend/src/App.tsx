@@ -13,6 +13,7 @@ import TournamentDetails from './pages/TournamentDetails';
 import ClientTournaments from './pages/ClientTournaments';
 import Profile from './pages/Profile';
 import Friends from './pages/Friends';
+import Subscription from './pages/Subscription';
 
 const queryClient = new QueryClient();
 
@@ -74,6 +75,12 @@ function App() {
             <Route path="/friends" element={
               <ProtectedRoute>
                <Friends />
+             </ProtectedRoute>
+            } />
+            {/* Модуль клиентский подписки*/}
+            <Route path="/subscription" element={
+               <ProtectedRoute>
+               <Subscription />
              </ProtectedRoute>
             } />
             

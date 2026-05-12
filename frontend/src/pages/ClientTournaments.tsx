@@ -130,12 +130,13 @@ const ClientTournaments: React.FC = () => {
     alert('Страница мессенджера в разработке');
   };
 
-  const handleSubscription = () => {
-    // TODO: переход на страницу подписки
-    alert('Страница подписки в разработке');
+ const handleSubscription = () => {
+  //Переход на страницу подписок
+   navigate('/subscription');
   };
 
   const handleFriends = () => {
+    //переход на страницу друзей
     navigate('/friends');
   };
 

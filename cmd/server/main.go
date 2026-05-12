@@ -48,6 +48,13 @@ func main() {
         log.Printf("Warning: sync failed: %v", err)
     }
 
+    // Инициализация подписок
+    subService := services.NewSubscriptionService(mongoClient.Database)
+    if err := subService.InitSubscriptions(context.Background()); err != nil {
+    log.Printf("Warning: subscription init failed: %v", err)
+    }
+
+
     // Инициализация хендлеров
     authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
@@ -91,6 +98,12 @@ func main() {
     api.HandleFunc("/client/profile", clientHandler.UpdateProfile).Methods("PUT", "OPTIONS")
     api.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
     api.HandleFunc("/auth/update", authHandler.UpdateUser).Methods("PUT", "OPTIONS")
+
+    // Маршруты для подписок
+    api.HandleFunc("/subscriptions", clientHandler.GetSubscriptions).Methods("GET", "OPTIONS")
+    api.HandleFunc("/subscriptions/my", clientHandler.GetUserSubscription).Methods("GET", "OPTIONS")
+    api.HandleFunc("/subscriptions/subscribe", clientHandler.Subscribe).Methods("POST", "OPTIONS")
+    api.HandleFunc("/subscriptions/cancel", clientHandler.CancelSubscription).Methods("POST", "OPTIONS")
 
     // Маршруты для административного модуля
     api.HandleFunc("/admin/users", userHandler.ListUsers).Methods("GET", "OPTIONS")
