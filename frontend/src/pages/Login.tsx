@@ -9,8 +9,8 @@ import {
   Typography,
   Box,
   Alert,
-  Divider,
 } from '@mui/material';
+import confetti from 'canvas-confetti';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +20,47 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const triggerConfetti = () => {
+    // Основной залп салюта
+    confetti({
+      particleCount: 150,
+      spread: 100,
+      origin: { y: 0.6 },
+      startVelocity: 15,
+      colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'],
+    });
+
+    // Дополнительная волна через 0.2 секунды
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.5, x: 0.3 },
+        startVelocity: 20,
+      });
+    }, 200);
+
+    // Ещё одна волна с другой стороны
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.5, x: 0.7 },
+        startVelocity: 20,
+      });
+    }, 400);
+
+    // Финальный залп
+    setTimeout(() => {
+      confetti({
+        particleCount: 200,
+        spread: 120,
+        origin: { y: 0.6 },
+        startVelocity: 25,
+      });
+    }, 600);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -27,21 +68,15 @@ const Login: React.FC = () => {
 
     try {
       await login({ email, password });
-      // После успешного входа перенаправляем на клиентскую страницу
-      // Дальше уже useAuth подскажет роль
-      navigate('/client/tournaments');
+      triggerConfetti(); // Запускаем салют
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 800); // Небольшая задержка, чтобы салют успел начаться
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ошибка входа');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGuestLogin = () => {
-    // Гость — просто переходим на страницу, без сохранения токена
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/client/tournaments');
   };
 
   return (
@@ -88,17 +123,6 @@ const Login: React.FC = () => {
               {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
-          
-          <Divider sx={{ my: 3 }}>или</Divider>
-          
-          <Button
-            fullWidth
-            variant="outlined"
-            onClick={handleGuestLogin}
-            sx={{ mb: 2 }}
-          >
-            Войти как гость
-          </Button>
           
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2">

@@ -10,6 +10,7 @@ import {
   Box,
   Alert,
 } from '@mui/material';
+import confetti from 'canvas-confetti';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,32 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 150,
+      spread: 100,
+      origin: { y: 0.6 },
+      startVelocity: 15,
+      colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'],
+    });
+
+    setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.5, x: 0.2 },
+      });
+    }, 200);
+
+    setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.5, x: 0.8 },
+      });
+    }, 400);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +66,10 @@ const Register: React.FC = () => {
 
     try {
       await register({ email, password, username });
-      navigate('/dashboard');
+      triggerConfetti();
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 800);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ошибка регистрации');
     } finally {
