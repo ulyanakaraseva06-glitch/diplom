@@ -9,6 +9,7 @@ import {
   Typography,
   Box,
   Alert,
+  Divider,
 } from '@mui/material';
 import confetti from 'canvas-confetti';
 
@@ -21,7 +22,6 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const triggerConfetti = () => {
-    // Основной залп салюта
     confetti({
       particleCount: 150,
       spread: 100,
@@ -30,7 +30,6 @@ const Login: React.FC = () => {
       colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'],
     });
 
-    // Дополнительная волна через 0.2 секунды
     setTimeout(() => {
       confetti({
         particleCount: 100,
@@ -40,7 +39,6 @@ const Login: React.FC = () => {
       });
     }, 200);
 
-    // Ещё одна волна с другой стороны
     setTimeout(() => {
       confetti({
         particleCount: 100,
@@ -50,7 +48,6 @@ const Login: React.FC = () => {
       });
     }, 400);
 
-    // Финальный залп
     setTimeout(() => {
       confetti({
         particleCount: 200,
@@ -68,15 +65,24 @@ const Login: React.FC = () => {
 
     try {
       await login({ email, password });
-      triggerConfetti(); // Запускаем салют
+      triggerConfetti();
       setTimeout(() => {
-        navigate('/dashboard');
-      }, 800); // Небольшая задержка, чтобы салют успел начаться
+        navigate('/client/tournaments');
+      }, 800);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Ошибка входа');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestLogin = () => {
+    triggerConfetti();
+    setTimeout(() => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/client/tournaments');
+    }, 800);
   };
 
   return (
@@ -123,6 +129,17 @@ const Login: React.FC = () => {
               {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
+          
+          <Divider sx={{ my: 3 }}>или</Divider>
+          
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={handleGuestLogin}
+            sx={{ mb: 2 }}
+          >
+            Войти как гость
+          </Button>
           
           <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2">
