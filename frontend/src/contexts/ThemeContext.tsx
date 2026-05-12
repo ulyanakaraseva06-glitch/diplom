@@ -2,8 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { lightTheme, darkTheme, cyberTheme } from '../theme';
-import { HeartsBackground, CracksBackground } from '../components/BackgroundPatterns';
-import ColorfulSquaresBackground from '../components/ColorfulSquaresBackground';
+import NeonGridOnlyBackground from '../components/NeonGridOnlyBackground';
 
 type ThemeType = 'light' | 'dark' | 'cyber';
 
@@ -40,12 +39,8 @@ export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ 
 
   const renderBackground = () => {
     switch (theme) {
-      case 'light':
-        return <HeartsBackground />;
-      case 'dark':
-        return <CracksBackground />;
       case 'cyber':
-        return <ColorfulSquaresBackground />;
+        return <NeonGridOnlyBackground />;
       default:
         return null;
     }
