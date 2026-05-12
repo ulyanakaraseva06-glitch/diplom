@@ -126,17 +126,14 @@ const ClientTournaments: React.FC = () => {
   };
 
   const handleMessenger = () => {
-    //Переход на мессенджер
-  navigate('/messenger');
+    navigate('/messenger');
   };
 
- const handleSubscription = () => {
-  //Переход на страницу подписок
-   navigate('/subscription');
+  const handleSubscription = () => {
+    navigate('/subscription');
   };
 
   const handleFriends = () => {
-    //переход на страницу друзей
     navigate('/friends');
   };
 
@@ -167,57 +164,63 @@ const ClientTournaments: React.FC = () => {
             </Button>
           ) : isAuthenticated ? (
             <>
-              {/* Кнопка Мессенджер */}
-              <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
-                Мессенджер
-              </Button>
-              
-              {/* Кнопка Подписка */}
-              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
-                Подписка
-              </Button>
-              
-              {/* Кнопка Друзья */}
-              <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
-                Друзья
-              </Button>
-              
-              {/* Кнопка Админ-панель (только для менеджеров) */}
-              {user?.role === 'manager' && (
+              {user?.role === 'manager' ? (
+                // Для менеджера: только кнопка "Админ-панель"
                 <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 2 }}>
                   Админ-панель
                 </Button>
+              ) : (
+                // Для обычного пользователя: все кнопки
+                <>
+                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
+                    Мессенджер
+                  </Button>
+                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
+                    Подписка
+                  </Button>
+                  <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
+                    Друзья
+                  </Button>
+                </>
               )}
               
-              {/* Выпадающее меню профиля */}
-              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <Typography variant="body2" sx={{ mr: 1 }}>
-                  {user?.username}
-                </Typography>
-              </Box>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'right',
-                }}
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
-              >
-                <MenuItem onClick={handleProfile}>
-                  <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                </MenuItem>
-                <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                </MenuItem>
-              </Menu>
+              {/* Выпадающее меню — только для обычных пользователей (у менеджера только выход) */}
+              {user?.role === 'manager' ? (
+                <Button color="inherit" onClick={handleLogout} sx={{ ml: 2 }}>
+                  Выйти
+                </Button>
+              ) : (
+                <>
+                  <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
+                      {user?.username?.[0]?.toUpperCase() || 'U'}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ mr: 1 }}>
+                      {user?.username}
+                    </Typography>
+                  </Box>
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={Boolean(anchorEl)}
+                    onClose={handleMenuClose}
+                    anchorOrigin={{
+                      vertical: 'bottom',
+                      horizontal: 'right',
+                    }}
+                    transformOrigin={{
+                      vertical: 'top',
+                      horizontal: 'right',
+                    }}
+                  >
+                    <MenuItem onClick={handleProfile}>
+                      <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
+                    </MenuItem>
+                    <MenuItem onClick={handleLogout}>
+                      <LogoutIcon sx={{ mr: 1 }} /> Выйти
+                    </MenuItem>
+                  </Menu>
+                </>
+              )}
             </>
           ) : null}
         </Toolbar>

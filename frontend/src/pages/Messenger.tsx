@@ -357,9 +357,6 @@ const Messenger: React.FC = () => {
             </Box>
           </Paper>
           
-          <Alert severity="info" sx={{ mt: 2 }}>
-            📌 Сообщения сохраняются локально в браузере. В будущем будет добавлено сохранение на сервере.
-          </Alert>
         </Box>
       </Container>
     </>
