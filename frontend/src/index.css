@@ -1,13 +1,44 @@
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Orbitron', 'Roboto Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #0a0a0f;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Стиль для скроллбара */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111118;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00d4ff;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5eeaff;
+}
+
+/* Анимация неонового свечения */
+@keyframes neonPulse {
+  0% {
+    text-shadow: 0 0 2px #00d4ff, 0 0 5px #00d4ff;
+  }
+  50% {
+    text-shadow: 0 0 5px #00d4ff, 0 0 10px #00d4ff, 0 0 15px #ff0044;
+  }
+  100% {
+    text-shadow: 0 0 2px #00d4ff, 0 0 5px #00d4ff;
+  }
+}
+
+.neon-text {
+  animation: neonPulse 2s ease-in-out infinite;
 }

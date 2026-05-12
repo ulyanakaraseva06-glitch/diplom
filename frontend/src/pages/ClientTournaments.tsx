@@ -154,45 +154,63 @@ const ClientTournaments: React.FC = () => {
     <>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Киберспортивная платформа
+          <Typography variant="h6" sx={{ flexGrow: 1, fontFamily: 'Orbitron, monospace', fontWeight: 700, letterSpacing: '0.1em' }}>
+            🎮 КИБЕРСПОРТ ПЛАТФОРМА
           </Typography>
           
           {isGuest ? (
-            <Button color="inherit" startIcon={<LoginIcon />} onClick={handleLogin}>
+            <Button color="inherit" startIcon={<LoginIcon />} onClick={handleLogin} sx={{ '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
               Войти
             </Button>
           ) : isAuthenticated ? (
             <>
               {user?.role === 'manager' ? (
-                // Для менеджера: только кнопка "Админ-панель"
-                <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 2 }}>
+                <Button 
+                  color="inherit" 
+                  startIcon={<AdminPanelSettingsIcon />} 
+                  onClick={handleAdminPanel} 
+                  sx={{ 
+                    mr: 2,
+                    '&:hover': { 
+                      textShadow: '0 0 5px #ff0044',
+                      backgroundColor: 'rgba(255, 0, 68, 0.1)'
+                    }
+                  }}
+                >
                   Админ-панель
                 </Button>
               ) : (
-                // Для обычного пользователя: все кнопки
                 <>
-                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
+                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Мессенджер
                   </Button>
-                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
+                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Подписка
                   </Button>
-                  <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
+                  <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Друзья
                   </Button>
                 </>
               )}
               
-              {/* Выпадающее меню — только для обычных пользователей (у менеджера только выход) */}
               {user?.role === 'manager' ? (
-                <Button color="inherit" onClick={handleLogout} sx={{ ml: 2 }}>
+                <Button 
+                  color="inherit" 
+                  onClick={handleLogout} 
+                  sx={{ 
+                    ml: 2,
+                    '&:hover': { 
+                      textShadow: '0 0 5px #ff0044',
+                      backgroundColor: 'rgba(255, 0, 68, 0.1)'
+                    }
+                  }}
+                >
                   Выйти
                 </Button>
               ) : (
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                    <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1, border: '2px solid #00d4ff' }}>
                       {user?.username?.[0]?.toUpperCase() || 'U'}
                     </Avatar>
                     <Typography variant="body2" sx={{ mr: 1 }}>
@@ -228,33 +246,61 @@ const ClientTournaments: React.FC = () => {
 
       <Container maxWidth="lg">
         <Box sx={{ mt: 4 }}>
-          <Typography variant="h4" gutterBottom>
-            Турниры
+          <Typography 
+            variant="h4" 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 800, 
+              letterSpacing: '0.15em', 
+              textTransform: 'uppercase',
+              background: 'linear-gradient(135deg, #00d4ff 0%, #ff0044 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textShadow: '0 0 20px rgba(0, 212, 255, 0.3)',
+              mb: 3
+            }}
+          >
+            ТУРНИРЫ
           </Typography>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2, bgcolor: 'rgba(255, 0, 68, 0.1)', border: '1px solid #ff0044' }}>{error}</Alert>}
 
           {tournaments.length === 0 ? (
-            <Typography color="text.secondary" align="center" sx={{ mt: 4 }}>
-              Нет доступных турниров
-            </Typography>
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Typography variant="h6" sx={{ color: '#a0a0b0', letterSpacing: '0.05em' }}>
+                НЕТ ДОСТУПНЫХ ТУРНИРОВ
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#a0a0b0', mt: 1 }}>
+                Зайдите позже — турниры скоро появятся
+              </Typography>
+            </Box>
           ) : (
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={{ overflow: 'hidden' }}>
               <Table>
                 <TableHead>
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                    <TableCell><strong>Название</strong></TableCell>
-                    <TableCell><strong>Игра</strong></TableCell>
-                    <TableCell><strong>Макс. команд</strong></TableCell>
-                    <TableCell><strong>Раундов</strong></TableCell>
-                    <TableCell><strong>Доп. информация</strong></TableCell>
-                    <TableCell align="center"><strong>Действие</strong></TableCell>
+                  <TableRow sx={{ backgroundColor: 'rgba(0, 212, 255, 0.08)' }}>
+                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>НАЗВАНИЕ</strong></TableCell>
+                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ИГРА</strong></TableCell>
+                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>МАКС. КОМАНД</strong></TableCell>
+                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>РАУНДОВ</strong></TableCell>
+                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ДОП. ИНФОРМАЦИЯ</strong></TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ДЕЙСТВИЕ</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {tournaments.map((tournament) => (
-                    <TableRow key={tournament.id} hover>
-                      <TableCell>{tournament.title}</TableCell>
+                    <TableRow 
+                      key={tournament.id} 
+                      hover 
+                      sx={{ 
+                        '&:hover': { 
+                          backgroundColor: 'rgba(0, 212, 255, 0.05)',
+                          transition: 'all 0.2s'
+                        } 
+                      }}
+                    >
+                      <TableCell sx={{ fontWeight: 500 }}>{tournament.title}</TableCell>
                       <TableCell>{tournament.game}</TableCell>
                       <TableCell>{tournament.max_teams}</TableCell>
                       <TableCell>{tournament.number_rounds}</TableCell>
@@ -262,11 +308,24 @@ const ClientTournaments: React.FC = () => {
                       <TableCell align="center">
                         <Button
                           variant="contained"
+                          color="primary"
                           size="small"
                           onClick={() => handleRegister(tournament.id)}
                           disabled={registering === tournament.id}
+                          sx={{
+                            background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
+                            boxShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #5eeaff 0%, #00d4ff 100%)',
+                              boxShadow: '0 0 20px rgba(0, 212, 255, 0.7)',
+                            },
+                            '&.Mui-disabled': {
+                              background: 'rgba(0, 212, 255, 0.3)',
+                              color: '#ffffff'
+                            }
+                          }}
                         >
-                          {registering === tournament.id ? 'Регистрация...' : 'Зарегистрироваться'}
+                          {registering === tournament.id ? 'РЕГИСТРАЦИЯ...' : 'ЗАРЕГИСТРИРОВАТЬСЯ'}
                         </Button>
                       </TableCell>
                     </TableRow>
