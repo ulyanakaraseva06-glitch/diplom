@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { lightTheme, darkTheme, cyberTheme } from '../theme';
+import { HeartsBackground, CracksBackground } from '../components/BackgroundPatterns';
+import ColorfulSquaresBackground from '../components/ColorfulSquaresBackground';
 
 type ThemeType = 'light' | 'dark' | 'cyber';
 
@@ -36,10 +38,24 @@ export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  const renderBackground = () => {
+    switch (theme) {
+      case 'light':
+        return <HeartsBackground />;
+      case 'dark':
+        return <CracksBackground />;
+      case 'cyber':
+        return <ColorfulSquaresBackground />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <ThemeContext.Provider value={{ theme, setTheme, currentTheme: getTheme() }}>
       <ThemeProvider theme={getTheme()}>
         <CssBaseline />
+        {renderBackground()}
         {children}
       </ThemeProvider>
     </ThemeContext.Provider>
