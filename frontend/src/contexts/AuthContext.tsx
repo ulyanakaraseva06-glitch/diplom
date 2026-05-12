@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
+  updateUser: (userData: Partial<User>) => void;
   isAuthenticated: boolean;
   isManager: boolean;
   isOrganizer: boolean;
@@ -58,6 +59,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authApi.logout();
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...userData };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
   const isAuthenticated = !!token;
   const isManager = user?.role === 'manager';
   const isOrganizer = user?.role === 'organizer' || user?.role === 'manager';
@@ -70,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       register,
       logout,
+      updateUser,
       isAuthenticated,
       isManager,
       isOrganizer,

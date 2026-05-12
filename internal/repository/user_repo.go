@@ -128,3 +128,22 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int, role models
 
     return nil
 }
+// UpdateUsername - обновление имени пользователя
+func (r *UserRepository) UpdateUsername(ctx context.Context, userID int, username string) error {
+    query := `
+        UPDATE users
+        SET username = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+    `
+
+    result, err := r.db.Pool.Exec(ctx, query, username, userID)
+    if err != nil {
+        return fmt.Errorf("failed to update username: %w", err)
+    }
+
+    if result.RowsAffected() == 0 {
+        return fmt.Errorf("user with id %d not found", userID)
+    }
+
+    return nil
+}

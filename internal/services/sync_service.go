@@ -49,8 +49,8 @@ func (s *SyncService) SyncAll(ctx context.Context) error {
                 ID:           u.ID,
                 Email:        u.Email,
                 PasswordHash: u.PasswordHash,
-                Game:         "",
-                Rank:         "",
+                Game:         []string{},
+                Rank:         []string{},
                 Achievements: []string{},
             }
             _, err = s.mongoUsers.InsertOne(ctx, mongoUser)

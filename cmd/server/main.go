@@ -79,11 +79,18 @@ func main() {
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
 
-    // Маршруты для клиентского модуля (публичные)
-    
+    // Маршруты для клиентского модуля (друзья)
+    api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/add", clientHandler.AddFriend).Methods("POST", "OPTIONS")
 
     // Маршруты для клиентского модуля (требуют авторизации)
     api.HandleFunc("/client/register", clientHandler.RegisterForTournament).Methods("POST", "OPTIONS")
+
+    // Клиентские маршруты для профиля
+    api.HandleFunc("/client/profile", clientHandler.GetProfile).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/profile", clientHandler.UpdateProfile).Methods("PUT", "OPTIONS")
+    api.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
+    api.HandleFunc("/auth/update", authHandler.UpdateUser).Methods("PUT", "OPTIONS")
 
     // Маршруты для административного модуля
     api.HandleFunc("/admin/users", userHandler.ListUsers).Methods("GET", "OPTIONS")

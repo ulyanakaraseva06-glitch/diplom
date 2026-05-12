@@ -11,6 +11,8 @@ import Bans from './pages/Bans';
 import Support from './pages/Support';
 import TournamentDetails from './pages/TournamentDetails';
 import ClientTournaments from './pages/ClientTournaments';
+import Profile from './pages/Profile';
+import Friends from './pages/Friends';
 
 const queryClient = new QueryClient();
 
@@ -33,6 +35,21 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// Защищённый маршрут для всех авторизованных пользователей
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <div>Загрузка...</div>;
+  }
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -46,6 +63,19 @@ function App() {
             {/* Клиентский модуль (доступен всем) */}
             <Route path="/" element={<Navigate to="/client/tournaments" />} />
             <Route path="/client/tournaments" element={<ClientTournaments />} />
+            
+            {/* Профиль (только для авторизованных) */}
+            <Route path="/profile" element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } />
+            {/* Модуль клиентский друзья*/}
+            <Route path="/friends" element={
+              <ProtectedRoute>
+               <Friends />
+             </ProtectedRoute>
+            } />
             
             {/* Административная панель (только для менеджеров) */}
             <Route path="/dashboard" element={

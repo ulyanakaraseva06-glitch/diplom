@@ -136,14 +136,12 @@ const ClientTournaments: React.FC = () => {
   };
 
   const handleFriends = () => {
-    // TODO: переход на страницу друзей
-    alert('Страница друзей в разработке');
+    navigate('/friends');
   };
 
   const handleProfile = () => {
     handleMenuClose();
-    // TODO: переход на страницу профиля
-    alert('Страница профиля в разработке');
+    navigate('/profile');
   };
 
   if (loading) {

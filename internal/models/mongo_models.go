@@ -1,12 +1,12 @@
 package models
 
 type UserMongo struct {
-    ID           int      `bson:"id"`
-    Email        string   `bson:"email"`
-    PasswordHash string   `bson:"password_hash"`
-    Game         string   `bson:"game"`
-    Rank         string   `bson:"rank"`
-    Achievements []string `bson:"achievements"`
+    ID           int      `json:"id" bson:"id"`
+    Email        string   `json:"email" bson:"email"`
+    PasswordHash string   `json:"password_hash" bson:"password_hash"`
+    Game         []string `json:"game" bson:"game"`
+    Rank         []string `json:"rank" bson:"rank"`
+    Achievements []string `json:"achievements" bson:"achievements"`
 }
 
 type TournamentMongo struct {

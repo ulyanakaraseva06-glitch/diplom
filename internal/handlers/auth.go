@@ -4,6 +4,8 @@ import (
     "encoding/json"
     "net/http"
     "time"
+
+    "esports-manager/internal/middleware"
     "esports-manager/internal/models"
     "esports-manager/internal/repository"
 
@@ -164,4 +166,60 @@ func ValidateToken(tokenString string, jwtSecret []byte) (jwt.MapClaims, error) 
         return nil, err
     }
     return claims, nil
+}
+// GetMe - получение текущего пользователя
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    user, err := h.userRepo.FindByID(r.Context(), userID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(user.ToResponse())
+}
+
+// UpdateUser - обновление данных пользователя (только username)
+func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    var req struct {
+        Username string `json:"username"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    if req.Username == "" {
+        http.Error(w, "Username is required", http.StatusBadRequest)
+        return
+    }
+
+    // Обновляем пользователя в PostgreSQL
+    err := h.userRepo.UpdateUsername(r.Context(), userID, req.Username)
+    if err != nil {
+        http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Получаем обновлённого пользователя
+    user, err := h.userRepo.FindByID(r.Context(), userID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(user.ToResponse())
 }

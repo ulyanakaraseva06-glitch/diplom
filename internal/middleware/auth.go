@@ -76,7 +76,7 @@ func GetUserRole(ctx context.Context) (string, bool) {
     return role, ok
 }
 
-// ValidateToken - валидация JWT токена
+// ValidateToken - валидация JWT токена и возврат claims
 func ValidateToken(tokenString string, jwtSecret []byte) (jwt.MapClaims, error) {
     claims := jwt.MapClaims{}
     token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
