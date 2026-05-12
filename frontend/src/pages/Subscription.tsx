@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useThemeContext } from '../contexts/ThemeContext';
 import {
   Container,
   Typography,
   Box,
-  Paper,
   Grid,
   Card,
   CardContent,
@@ -15,7 +15,6 @@ import {
   Alert,
   AppBar,
   Toolbar,
-  IconButton,
   Menu,
   MenuItem,
   Avatar,
@@ -24,6 +23,7 @@ import {
   ListItemIcon,
   ListItemText,
   Chip,
+  Paper,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -34,6 +34,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import StarIcon from '@mui/icons-material/Star';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ComputerIcon from '@mui/icons-material/Computer';
 
 interface Subscription {
   id: string;
@@ -45,6 +46,7 @@ interface Subscription {
 
 const SubscriptionPage: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const { theme } = useThemeContext();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -116,7 +118,7 @@ const SubscriptionPage: React.FC = () => {
   };
 
   const handleCancelSubscription = async () => {
-  if (!window.confirm('Отменить подписку?')) return;
+    if (!window.confirm('Отменить подписку?')) return;
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:8080/api/subscriptions/cancel', {
@@ -158,7 +160,7 @@ const SubscriptionPage: React.FC = () => {
   };
 
   const handleMessenger = () => {
-    alert('Страница мессенджера в разработке');
+    navigate('/messenger');
   };
 
   const handleFriends = () => {
@@ -170,6 +172,11 @@ const SubscriptionPage: React.FC = () => {
     navigate('/profile');
   };
 
+  const handleThemes = () => {
+    handleMenuClose();
+    navigate('/themes');
+  };
+
   const handleBack = () => {
     navigate('/client/tournaments');
   };
@@ -178,19 +185,27 @@ const SubscriptionPage: React.FC = () => {
 
   const getCardColor = (targetType: string) => {
     switch (targetType) {
-      case 'user': return '#e3f2fd';
-      case 'team': return '#e8f5e9';
-      case 'organizer': return '#fff3e0';
-      default: return '#f5f5f5';
+      case 'user':
+        return theme === 'light' ? '#f3e5f5' : theme === 'dark' ? '#3d2a2a' : '#1a1a2e';
+      case 'team':
+        return theme === 'light' ? '#fce4ec' : theme === 'dark' ? '#2a2a3d' : '#0d0d1a';
+      case 'organizer':
+        return theme === 'light' ? '#fff3e0' : theme === 'dark' ? '#2d2d1a' : '#111118';
+      default:
+        return '#f5f5f5';
     }
   };
 
   const getCardBorderColor = (targetType: string) => {
     switch (targetType) {
-      case 'user': return '#1976d2';
-      case 'team': return '#2e7d32';
-      case 'organizer': return '#ed6c02';
-      default: return '#9e9e9e';
+      case 'user':
+        return theme === 'light' ? '#9c27b0' : theme === 'dark' ? '#ef5350' : '#00d4ff';
+      case 'team':
+        return theme === 'light' ? '#e91e63' : theme === 'dark' ? '#ef5350' : '#ff0044';
+      case 'organizer':
+        return theme === 'light' ? '#ff9800' : theme === 'dark' ? '#ff9800' : '#ffaa00';
+      default:
+        return '#9e9e9e';
     }
   };
 
@@ -246,6 +261,9 @@ const SubscriptionPage: React.FC = () => {
                 <MenuItem onClick={handleProfile}>
                   <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
                 </MenuItem>
+                <MenuItem onClick={handleThemes}>
+                  <ComputerIcon sx={{ mr: 1 }} /> Темы
+                </MenuItem>
                 <MenuItem onClick={handleLogout}>
                   <LogoutIcon sx={{ mr: 1 }} /> Выйти
                 </MenuItem>
@@ -266,7 +284,7 @@ const SubscriptionPage: React.FC = () => {
           </Typography>
 
           {userSubscription && userSubscription.is_active && (
-            <Paper sx={{ p: 2, mb: 4, bgcolor: '#e8f5e9', textAlign: 'center' }}>
+            <Paper sx={{ p: 2, mb: 4, bgcolor: theme === 'light' ? '#e8f5e9' : theme === 'dark' ? '#1b5e20' : 'rgba(0, 255, 136, 0.1)', textAlign: 'center', border: theme === 'cyber' ? '1px solid #00ff88' : 'none' }}>
               <Typography variant="h6">
                 У вас активна подписка! 🎉
               </Typography>
@@ -311,7 +329,7 @@ const SubscriptionPage: React.FC = () => {
                       </Typography>
                       <Chip 
                         label={sub.target_type === 'user' ? 'Для игрока' : sub.target_type === 'team' ? 'Для команды' : 'Для организатора'} 
-                        color={sub.target_type === 'user' ? 'primary' : sub.target_type === 'team' ? 'success' : 'warning'}
+                        color={sub.target_type === 'user' ? 'primary' : sub.target_type === 'team' ? 'secondary' : 'warning'}
                         size="small"
                       />
                     </Box>

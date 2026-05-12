@@ -17,7 +17,6 @@ import {
   Alert,
   AppBar,
   Toolbar,
-  IconButton,
   Menu,
   MenuItem,
   Avatar,
@@ -29,6 +28,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import ChatIcon from '@mui/icons-material/Chat';
 import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
 import PeopleIcon from '@mui/icons-material/People';
+import ComputerIcon from '@mui/icons-material/Computer';
 
 interface Tournament {
   id: number;
@@ -142,6 +142,11 @@ const ClientTournaments: React.FC = () => {
     navigate('/profile');
   };
 
+  const handleThemes = () => {
+    handleMenuClose();
+    navigate('/themes');
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
@@ -165,21 +170,37 @@ const ClientTournaments: React.FC = () => {
           ) : isAuthenticated ? (
             <>
               {user?.role === 'manager' ? (
-                <Button 
-                  color="inherit" 
-                  startIcon={<AdminPanelSettingsIcon />} 
-                  onClick={handleAdminPanel} 
-                  sx={{ 
-                    mr: 2,
-                    '&:hover': { 
-                      textShadow: '0 0 5px #ff0044',
-                      backgroundColor: 'rgba(255, 0, 68, 0.1)'
-                    }
-                  }}
-                >
-                  Админ-панель
-                </Button>
+                // Менеджер: только админ-панель и кнопка выхода
+                <>
+                  <Button 
+                    color="inherit" 
+                    startIcon={<AdminPanelSettingsIcon />} 
+                    onClick={handleAdminPanel} 
+                    sx={{ 
+                      mr: 2,
+                      '&:hover': { 
+                        textShadow: '0 0 5px #ff0044',
+                        backgroundColor: 'rgba(255, 0, 68, 0.1)'
+                      }
+                    }}
+                  >
+                    Админ-панель
+                  </Button>
+                  <Button 
+                    color="inherit" 
+                    onClick={handleLogout} 
+                    sx={{ 
+                      '&:hover': { 
+                        textShadow: '0 0 5px #ff0044',
+                        backgroundColor: 'rgba(255, 0, 68, 0.1)'
+                      }
+                    }}
+                  >
+                    Выйти
+                  </Button>
+                </>
               ) : (
+                // Обычный пользователь: все кнопки
                 <>
                   <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Мессенджер
@@ -190,25 +211,7 @@ const ClientTournaments: React.FC = () => {
                   <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Друзья
                   </Button>
-                </>
-              )}
-              
-              {user?.role === 'manager' ? (
-                <Button 
-                  color="inherit" 
-                  onClick={handleLogout} 
-                  sx={{ 
-                    ml: 2,
-                    '&:hover': { 
-                      textShadow: '0 0 5px #ff0044',
-                      backgroundColor: 'rgba(255, 0, 68, 0.1)'
-                    }
-                  }}
-                >
-                  Выйти
-                </Button>
-              ) : (
-                <>
+                  
                   <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
                     <Avatar sx={{ width: 32, height: 32, mr: 1, border: '2px solid #00d4ff' }}>
                       {user?.username?.[0]?.toUpperCase() || 'U'}
@@ -232,6 +235,9 @@ const ClientTournaments: React.FC = () => {
                   >
                     <MenuItem onClick={handleProfile}>
                       <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
+                    </MenuItem>
+                    <MenuItem onClick={handleThemes}>
+                      <ComputerIcon sx={{ mr: 1 }} /> Темы
                     </MenuItem>
                     <MenuItem onClick={handleLogout}>
                       <LogoutIcon sx={{ mr: 1 }} /> Выйти
