@@ -40,7 +40,71 @@ func (h *ClientHandler) GetTournaments(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(tournaments)
 }
+// GetUserTheme - получение темы пользователя
+func (h *ClientHandler) GetUserTheme(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
+    var user models.UserMongo
+    err := h.mongoDB.Collection("users").FindOne(r.Context(), bson.M{"id": userID}).Decode(&user)
+    if err != nil {
+        // Если пользователь не найден, возвращаем тему по умолчанию
+        json.NewEncoder(w).Encode(map[string]string{"theme": "cyber"})
+        return
+    }
+
+    theme := user.Theme
+    if theme == "" {
+        theme = "cyber"
+    }
+
+    json.NewEncoder(w).Encode(map[string]string{"theme": theme})
+}
+
+// UpdateUserTheme - обновление темы пользователя
+func (h *ClientHandler) UpdateUserTheme(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    var req struct {
+        Theme string `json:"theme"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    // Валидация темы
+    validThemes := map[string]bool{"light": true, "dark": true, "cyber": true}
+    if !validThemes[req.Theme] {
+        http.Error(w, "Invalid theme", http.StatusBadRequest)
+        return
+    }
+
+    update := bson.M{
+        "$set": bson.M{
+            "theme": req.Theme,
+        },
+    }
+
+    _, err := h.mongoDB.Collection("users").UpdateOne(
+        r.Context(),
+        bson.M{"id": userID},
+        update,
+    )
+    if err != nil {
+        http.Error(w, "Failed to update theme", http.StatusInternalServerError)
+        return
+    }
+
+    json.NewEncoder(w).Encode(map[string]string{"message": "Theme updated", "theme": req.Theme})
+}
 // RegisterForTournament - регистрация на турнир
 func (h *ClientHandler) RegisterForTournament(w http.ResponseWriter, r *http.Request) {
     userID, ok := middleware.GetUserID(r.Context())

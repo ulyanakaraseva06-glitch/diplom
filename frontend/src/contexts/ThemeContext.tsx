@@ -4,6 +4,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { lightTheme, darkTheme, cyberTheme } from '../theme';
 import { HeartsBackground, CracksBackground } from '../components/BackgroundPatterns';
 import ColorfulSquaresBackground from '../components/ColorfulSquaresBackground';
+import { useAuth } from './AuthContext';
 
 type ThemeType = 'light' | 'dark' | 'cyber';
 
@@ -16,14 +17,58 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<ThemeType>(() => {
-    const saved = localStorage.getItem('app-theme') as ThemeType;
-    return saved || 'cyber';
-  });
+  const { isAuthenticated, token } = useAuth();
+  const [theme, setThemeState] = useState<ThemeType>('cyber');
+  const [loading, setLoading] = useState(true);
 
+  // Загрузка темы из БД при авторизации
   useEffect(() => {
-    localStorage.setItem('app-theme', theme);
-  }, [theme]);
+    if (!isAuthenticated || !token) {
+      setThemeState('cyber');
+      setLoading(false);
+      return;
+    }
+
+    const fetchTheme = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/client/theme', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setThemeState(data.theme as ThemeType);
+        }
+      } catch (err) {
+        console.error('Failed to fetch theme:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTheme();
+  }, [isAuthenticated, token]);
+
+  // Сохранение темы в БД при изменении
+  const setTheme = async (newTheme: ThemeType) => {
+    setThemeState(newTheme);
+    
+    if (!isAuthenticated || !token) return;
+    
+    try {
+      await fetch('http://localhost:8080/api/client/theme', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ theme: newTheme }),
+      });
+    } catch (err) {
+      console.error('Failed to save theme:', err);
+    }
+  };
 
   const getTheme = () => {
     switch (theme) {
@@ -50,6 +95,10 @@ export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ 
         return null;
     }
   };
+
+  if (loading) {
+    return <>{children}</>;
+  }
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, currentTheme: getTheme() }}>

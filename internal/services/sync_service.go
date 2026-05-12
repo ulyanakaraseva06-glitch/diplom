@@ -52,10 +52,23 @@ func (s *SyncService) SyncAll(ctx context.Context) error {
                 Game:         []string{},
                 Rank:         []string{},
                 Achievements: []string{},
+                Theme:        "cyber", // тема по умолчанию
             }
             _, err = s.mongoUsers.InsertOne(ctx, mongoUser)
             if err != nil {
                 log.Printf("Failed to insert user %d: %v", u.ID, err)
+            }
+        } else if err == nil {
+            // Если пользователь есть, но нет поля Theme — добавляем
+            if existing.Theme == "" {
+                _, err = s.mongoUsers.UpdateOne(
+                    ctx,
+                    bson.M{"id": u.ID},
+                    bson.M{"$set": bson.M{"theme": "cyber"}},
+                )
+                if err != nil {
+                    log.Printf("Failed to add theme to user %d: %v", u.ID, err)
+                }
             }
         }
     }

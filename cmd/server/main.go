@@ -129,7 +129,10 @@ func main() {
     api.HandleFunc("/support/{user_id:[0-9]+}/unread", supportHandler.GetUnreadCount).Methods("GET", "OPTIONS")
     api.HandleFunc("/support/{user_id:[0-9]+}/read", supportHandler.MarkAsRead).Methods("POST", "OPTIONS")
 
-    // Маршруты только для менеджеров
+        // Маршруты для темы
+    api.HandleFunc("/client/theme", clientHandler.GetUserTheme).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/theme", clientHandler.UpdateUserTheme).Methods("PUT", "OPTIONS")
+        // Маршруты только для менеджеров
     admin := api.PathPrefix("/admin").Subrouter()
     admin.Use(middleware.RequireManager)
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.UpdateTournament).Methods("PUT", "OPTIONS")

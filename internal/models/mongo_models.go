@@ -12,6 +12,7 @@ type UserMongo struct {
     Game         []string `json:"game" bson:"game"`
     Rank         []string `json:"rank" bson:"rank"`
     Achievements []string `json:"achievements" bson:"achievements"`
+    Theme        string   `json:"theme" bson:"theme"` // light, dark, cyber
 }
 
 type TournamentMongo struct {
