@@ -126,8 +126,8 @@ const ClientTournaments: React.FC = () => {
   };
 
   const handleMessenger = () => {
-    // TODO: переход на страницу мессенджера
-    alert('Страница мессенджера в разработке');
+    //Переход на мессенджер
+  navigate('/messenger');
   };
 
  const handleSubscription = () => {

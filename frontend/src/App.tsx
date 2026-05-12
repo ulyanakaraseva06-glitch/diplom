@@ -14,6 +14,7 @@ import ClientTournaments from './pages/ClientTournaments';
 import Profile from './pages/Profile';
 import Friends from './pages/Friends';
 import Subscription from './pages/Subscription';
+import Messenger from './pages/Messenger';
 
 const queryClient = new QueryClient();
 
@@ -83,6 +84,13 @@ function App() {
                <Subscription />
              </ProtectedRoute>
             } />
+            {/* Модуль клиентский мессенджер*/}
+            <Route path="/messenger" element={
+              <ProtectedRoute>
+              <Messenger />
+            </ProtectedRoute>
+            } />
+
             
             {/* Административная панель (только для менеджеров) */}
             <Route path="/dashboard" element={
