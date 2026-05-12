@@ -3,7 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { lightTheme, darkTheme, cyberTheme } from '../theme';
 import { HeartsBackground, CracksBackground } from '../components/BackgroundPatterns';
-import { TetrisBackground } from '../components/TetrisBackground';
+import ColorfulSquaresBackground from '../components/ColorfulSquaresBackground';
 
 type ThemeType = 'light' | 'dark' | 'cyber';
 
@@ -45,7 +45,7 @@ export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ 
       case 'dark':
         return <CracksBackground />;
       case 'cyber':
-        return <TetrisBackground />;
+        return <ColorfulSquaresBackground />;
       default:
         return null;
     }
