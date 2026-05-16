@@ -3,7 +3,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { lightTheme, darkTheme, cyberTheme } from '../theme';
 import { HeartsBackground, CracksBackground } from '../components/BackgroundPatterns';
-import ColorfulSquaresBackground from '../components/ColorfulSquaresBackground';
+import NeonGridOnlyBackground from '../components/NeonGridOnlyBackground';
 import { useAuth } from './AuthContext';
 
 type ThemeType = 'light' | 'dark' | 'cyber';
@@ -90,7 +90,7 @@ export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ 
       case 'dark':
         return <CracksBackground />;
       case 'cyber':
-        return <ColorfulSquaresBackground />;
+        return <NeonGridOnlyBackground  />;
       default:
         return null;
     }
