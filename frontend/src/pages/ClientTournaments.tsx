@@ -29,6 +29,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
 import PeopleIcon from '@mui/icons-material/People';
 import ComputerIcon from '@mui/icons-material/Computer';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 
 interface Tournament {
   id: number;
@@ -147,6 +148,10 @@ const ClientTournaments: React.FC = () => {
     navigate('/themes');
   };
 
+  const handleMyTournaments = () => {
+    navigate('/my-tournaments');
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
@@ -199,8 +204,58 @@ const ClientTournaments: React.FC = () => {
                     Выйти
                   </Button>
                 </>
+              ) : user?.role === 'organizer' ? (
+                // Организатор: мессенджер, подписка, мои турниры
+                <>
+                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
+                    Мессенджер
+                  </Button>
+                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
+                    Подписка
+                  </Button>
+                  <Button 
+                    color="inherit" 
+                    startIcon={<EmojiEventsIcon />} 
+                    onClick={handleMyTournaments} 
+                    sx={{ mr: 2, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}
+                  >
+                    Мои турниры
+                  </Button>
+                  
+                  <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
+                    <Avatar sx={{ width: 32, height: 32, mr: 1, border: '2px solid #00d4ff' }}>
+                      {user?.username?.[0]?.toUpperCase() || 'U'}
+                    </Avatar>
+                    <Typography variant="body2" sx={{ mr: 1 }}>
+                      {user?.username}
+                    </Typography>
+                  </Box>
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={Boolean(anchorEl)}
+                    onClose={handleMenuClose}
+                    anchorOrigin={{
+                      vertical: 'bottom',
+                      horizontal: 'right',
+                    }}
+                    transformOrigin={{
+                      vertical: 'top',
+                      horizontal: 'right',
+                    }}
+                  >
+                    <MenuItem onClick={handleProfile}>
+                      <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
+                    </MenuItem>
+                    <MenuItem onClick={handleThemes}>
+                      <ComputerIcon sx={{ mr: 1 }} /> Темы
+                    </MenuItem>
+                    <MenuItem onClick={handleLogout}>
+                      <LogoutIcon sx={{ mr: 1 }} /> Выйти
+                    </MenuItem>
+                  </Menu>
+                </>
               ) : (
-                // Обычный пользователь: все кнопки
+                // Обычный пользователь: все кнопки, включая друзей
                 <>
                   <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
                     Мессенджер
@@ -272,7 +327,7 @@ const ClientTournaments: React.FC = () => {
 
           {error && <Alert severity="error" sx={{ mb: 2, bgcolor: 'rgba(255, 0, 68, 0.1)', border: '1px solid #ff0044' }}>{error}</Alert>}
 
-          {tournaments.length === 0 ? (
+          {(!tournaments || tournaments.length === 0) ? (
             <Box sx={{ textAlign: 'center', py: 8 }}>
               <Typography variant="h6" sx={{ color: '#a0a0b0', letterSpacing: '0.05em' }}>
                 НЕТ ДОСТУПНЫХ ТУРНИРОВ

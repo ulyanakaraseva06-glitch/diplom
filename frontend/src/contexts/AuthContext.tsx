@@ -1,3 +1,4 @@
+// AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/auth';
 import { User, LoginRequest, RegisterRequest } from '../types';
@@ -13,6 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isManager: boolean;
   isOrganizer: boolean;
+  canManageTournaments: boolean;  
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,7 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const isAuthenticated = !!token;
   const isManager = user?.role === 'manager';
-  const isOrganizer = user?.role === 'organizer' || user?.role === 'manager';
+  const isOrganizer = user?.role === 'organizer';
+  const canManageTournaments = isOrganizer || isManager; 
 
   return (
     <AuthContext.Provider value={{
@@ -83,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated,
       isManager,
       isOrganizer,
+      canManageTournaments,  
     }}>
       {children}
     </AuthContext.Provider>

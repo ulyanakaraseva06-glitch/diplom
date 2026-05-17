@@ -17,6 +17,7 @@ import Messenger from './pages/Messenger';
 import Subscription from './pages/Subscription';
 import Friends from './pages/Friends';
 import Themes from './pages/Themes';
+import MyTournaments from './pages/MyTournaments';
 
 const queryClient = new QueryClient();
 
@@ -97,6 +98,10 @@ function AppRoutes() {
         <AdminRoute>
           <Dashboard />
         </AdminRoute>
+      } />
+
+      <Route path="/my-tournaments" element={
+        <MyTournaments />
       } />
       
       <Route path="/tournaments" element={
