@@ -24,6 +24,7 @@ import {
   ListItemText,
   Chip,
   Paper,
+  Divider,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -35,6 +36,9 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import StarIcon from '@mui/icons-material/Star';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ComputerIcon from '@mui/icons-material/Computer';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import DiamondIcon from '@mui/icons-material/Diamond';
+import WhatshotIcon from '@mui/icons-material/Whatshot';
 
 interface Subscription {
   id: string;
@@ -167,6 +171,10 @@ const SubscriptionPage: React.FC = () => {
     navigate('/friends');
   };
 
+  const handleMyTournaments = () => {
+    navigate('/my-tournaments');
+  };
+
   const handleProfile = () => {
     handleMenuClose();
     navigate('/profile');
@@ -183,35 +191,48 @@ const SubscriptionPage: React.FC = () => {
 
   const isGuest = !isAuthenticated && !localStorage.getItem('token');
 
-  const getCardColor = (targetType: string) => {
+  const getCardGradient = (targetType: string) => {
     switch (targetType) {
       case 'user':
-        return theme === 'light' ? '#f3e5f5' : theme === 'dark' ? '#3d2a2a' : '#1a1a2e';
+        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
       case 'team':
-        return theme === 'light' ? '#fce4ec' : theme === 'dark' ? '#2a2a3d' : '#0d0d1a';
+        return 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
       case 'organizer':
-        return theme === 'light' ? '#fff3e0' : theme === 'dark' ? '#2d2d1a' : '#111118';
+        return 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)';
       default:
-        return '#f5f5f5';
+        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
     }
   };
 
-  const getCardBorderColor = (targetType: string) => {
+  const getCardIcon = (targetType: string) => {
     switch (targetType) {
       case 'user':
-        return theme === 'light' ? '#9c27b0' : theme === 'dark' ? '#ef5350' : '#00d4ff';
+        return <StarIcon sx={{ fontSize: 60, color: '#fff', opacity: 0.3 }} />;
       case 'team':
-        return theme === 'light' ? '#e91e63' : theme === 'dark' ? '#ef5350' : '#ff0044';
+        return <PeopleIcon sx={{ fontSize: 60, color: '#fff', opacity: 0.3 }} />;
       case 'organizer':
-        return theme === 'light' ? '#ff9800' : theme === 'dark' ? '#ff9800' : '#ffaa00';
+        return <DiamondIcon sx={{ fontSize: 60, color: '#fff', opacity: 0.3 }} />;
       default:
-        return '#9e9e9e';
+        return <WhatshotIcon sx={{ fontSize: 60, color: '#fff', opacity: 0.3 }} />;
+    }
+  };
+
+  const getTargetTypeLabel = (targetType: string) => {
+    switch (targetType) {
+      case 'user':
+        return 'Для игрока';
+      case 'team':
+        return 'Для команды';
+      case 'organizer':
+        return 'Для организатора';
+      default:
+        return targetType;
     }
   };
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
+      <Box display="flex" justifyContent="center" alignItems="center" sx={{ height: '80vh' }}>
         <CircularProgress />
       </Box>
     );
@@ -233,9 +254,18 @@ const SubscriptionPage: React.FC = () => {
               <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={() => navigate('/subscription')} sx={{ mr: 1 }}>
                 Подписка
               </Button>
-              <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
-                Друзья
-              </Button>
+              
+              {user?.role === 'user' && (
+                <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
+                  Друзья
+                </Button>
+              )}
+              
+              {user?.role === 'organizer' && (
+                <Button color="inherit" startIcon={<EmojiEventsIcon />} onClick={handleMyTournaments} sx={{ mr: 2 }}>
+                  Мои турниры
+                </Button>
+              )}
               
               {user?.role === 'manager' && (
                 <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 2 }}>
@@ -255,8 +285,6 @@ const SubscriptionPage: React.FC = () => {
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
                 onClose={handleMenuClose}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               >
                 <MenuItem onClick={handleProfile}>
                   <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
@@ -279,8 +307,11 @@ const SubscriptionPage: React.FC = () => {
             Назад к турнирам
           </Button>
           
-          <Typography variant="h4" gutterBottom align="center" sx={{ mb: 4 }}>
-            Подписки
+          <Typography variant="h4" gutterBottom align="center" sx={{ mb: 1, fontWeight: 700 }}>
+            Выберите подписку
+          </Typography>
+          <Typography variant="body1" align="center" color="text.secondary" sx={{ mb: 4 }}>
+            Получите доступ к расширенным возможностям платформы
           </Typography>
 
           {userSubscription && userSubscription.is_active && (
@@ -305,74 +336,148 @@ const SubscriptionPage: React.FC = () => {
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Grid container spacing={3}>
-            {subscriptions.map((sub) => (
-              <Grid size={{ xs: 12, md: 4 }} key={sub.id}>
-                <Card 
-                  sx={{ 
-                    height: '100%', 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    borderTop: `4px solid ${getCardBorderColor(sub.target_type)}`,
-                    bgcolor: getCardColor(sub.target_type),
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: 6,
-                    },
-                  }}
+          {subscriptions.length === 0 ? (
+            <Paper sx={{ p: 4, textAlign: 'center' }}>
+              <Typography variant="h6" color="text.secondary">
+                Нет доступных подписок для вашей роли
+              </Typography>
+            </Paper>
+          ) : (
+            <Grid container spacing={4} justifyContent="center">
+              {subscriptions.map((sub) => (
+                <Grid 
+                  size={{ 
+                    xs: 12, 
+                    sm: subscriptions.length === 1 ? 12 : 6, 
+                    md: subscriptions.length === 1 ? 8 : 6,
+                    lg: subscriptions.length === 1 ? 6 : 4
+                  }} 
+                  key={sub.id}
                 >
-                  <CardContent sx={{ flexGrow: 1 }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="h5" component="h2" fontWeight="bold">
-                        {sub.name}
-                      </Typography>
-                      <Chip 
-                        label={sub.target_type === 'user' ? 'Для игрока' : sub.target_type === 'team' ? 'Для команды' : 'Для организатора'} 
-                        color={sub.target_type === 'user' ? 'primary' : sub.target_type === 'team' ? 'secondary' : 'warning'}
-                        size="small"
-                      />
+                  <Card 
+                    sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      position: 'relative',
+                      overflow: 'visible',
+                      borderRadius: 4,
+                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: 8,
+                      },
+                    }}
+                  >
+                    {/* Градиентный фон карточки */}
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 120,
+                        background: getCardGradient(sub.target_type),
+                        borderTopLeftRadius: 16,
+                        borderTopRightRadius: 16,
+                      }}
+                    />
+                    
+                    {/* Иконка */}
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        mt: 3,
+                        zIndex: 1,
+                      }}
+                    >
+                      {getCardIcon(sub.target_type)}
                     </Box>
                     
-                    <Typography variant="h3" component="div" fontWeight="bold" color="primary" sx={{ mb: 2 }}>
-                      {sub.price} ₽
-                      <Typography variant="caption" color="text.secondary" component="span">
-                        /мес
+                    <CardContent sx={{ flexGrow: 1, pt: 0 }}>
+                      <Box textAlign="center" sx={{ mt: 2 }}>
+                        <Chip 
+                          label={getTargetTypeLabel(sub.target_type)} 
+                          color={sub.target_type === 'user' ? 'primary' : sub.target_type === 'team' ? 'secondary' : 'warning'}
+                          size="small"
+                          sx={{ mb: 2, fontWeight: 600 }}
+                        />
+                        <Typography variant="h5" component="h2" fontWeight="bold" gutterBottom>
+                          {sub.name}
+                        </Typography>
+                        <Box sx={{ my: 2 }}>
+                          <Typography 
+                            variant="h2" 
+                            component="span" 
+                            fontWeight="bold" 
+                            sx={{ 
+                              fontSize: { xs: '2.5rem', sm: '3rem' },
+                              color: sub.target_type === 'user' ? '#667eea' : sub.target_type === 'team' ? '#f5576c' : '#fa709a'
+                            }}
+                          >
+                            {sub.price}
+                          </Typography>
+                          <Typography variant="h6" component="span" color="text.secondary">
+                            ₽
+                          </Typography>
+                          <Typography variant="body2" component="span" color="text.secondary">
+                            /мес
+                          </Typography>
+                        </Box>
+                      </Box>
+                      
+                      <Divider sx={{ my: 2 }} />
+                      
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ fontWeight: 600 }}>
+                        Что вы получаете:
                       </Typography>
-                    </Typography>
+                      <List dense disablePadding>
+                        {sub.benefits.map((benefit, idx) => (
+                          <ListItem key={idx} sx={{ px: 0, py: 0.5 }}>
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              <CheckCircleIcon color="success" fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText 
+                              primary={benefit} 
+                              primaryTypographyProps={{ variant: 'body2' }}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </CardContent>
                     
-                    <List dense>
-                      {sub.benefits.map((benefit, idx) => (
-                        <ListItem key={idx} sx={{ pl: 0 }}>
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            <CheckCircleIcon color="success" fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText primary={benefit} />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </CardContent>
-                  
-                  <CardActions sx={{ p: 2, pt: 0 }}>
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      size="large"
-                      onClick={() => handleSubscribe(sub.id)}
-                      disabled={subscribing === sub.id || (userSubscription && userSubscription.is_active)}
-                      startIcon={<StarIcon />}
-                    >
-                      {subscribing === sub.id 
-                        ? 'Оформление...' 
-                        : (userSubscription && userSubscription.is_active) 
-                          ? 'Уже активна' 
-                          : 'Оформить'}
-                    </Button>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                    <CardActions sx={{ p: 3, pt: 0 }}>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        size="large"
+                        onClick={() => handleSubscribe(sub.id)}
+                        disabled={subscribing === sub.id || (userSubscription && userSubscription.is_active)}
+                        startIcon={<StarIcon />}
+                        sx={{
+                          background: getCardGradient(sub.target_type),
+                          borderRadius: 3,
+                          py: 1.5,
+                          '&:hover': {
+                            opacity: 0.9,
+                            background: getCardGradient(sub.target_type),
+                          },
+                        }}
+                      >
+                        {subscribing === sub.id 
+                          ? 'Оформление...' 
+                          : (userSubscription && userSubscription.is_active) 
+                            ? 'Уже активна' 
+                            : 'Оформить подписку'}
+                      </Button>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
         </Box>
       </Container>
     </>

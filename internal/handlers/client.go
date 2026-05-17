@@ -327,9 +327,34 @@ func (h *ClientHandler) AddFriend(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(map[string]string{"message": "Friend added successfully"})
 }
-// GetSubscriptions - список доступных подписок
+
+// GetSubscriptions - список доступных подписок с фильтрацией по роли
 func (h *ClientHandler) GetSubscriptions(w http.ResponseWriter, r *http.Request) {
-    cursor, err := h.mongoDB.Collection("subscriptions").Find(r.Context(), bson.M{})
+    // Получаем роль пользователя (userID не нужен, но получаем его для проверки авторизации)
+    _, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    
+    role, _ := middleware.GetUserRole(r.Context())
+    
+    // Строим фильтр в зависимости от роли
+    filter := bson.M{}
+    
+    switch role {
+    case "organizer":
+        // Организатор видит только подписку для организатора
+        filter = bson.M{"target_type": "organizer"}
+    case "manager":
+        // Менеджер видит все подписки
+        filter = bson.M{}
+    default:
+        // Обычный пользователь видит подписки для пользователя и команды
+        filter = bson.M{"target_type": bson.M{"$in": []string{"user", "team"}}}
+    }
+    
+    cursor, err := h.mongoDB.Collection("subscriptions").Find(r.Context(), filter)
     if err != nil {
         http.Error(w, "Failed to fetch subscriptions", http.StatusInternalServerError)
         return
