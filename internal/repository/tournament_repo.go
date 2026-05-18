@@ -3,6 +3,7 @@ package repository
 import (
     "context"
     "fmt"
+    "database/sql"
     "esports-manager/internal/db"
     "esports-manager/internal/models"
 
@@ -90,10 +91,11 @@ func (r *TournamentRepository) List(ctx context.Context, game string, status mod
     defer rows.Close()
 
     var tournaments []*models.Tournament
+    var description sql.NullString
     for rows.Next() {
         var t models.Tournament
         err := rows.Scan(
-            &t.ID, &t.Title, &t.Game, &t.Description,
+            &t.ID, &t.Title, &t.Game, &description,
             &t.StartDate, &t.RegistrationDeadline,
             &t.EntryFee, &t.PrizePool, &t.MaxTeams,
             &t.Status, &t.OrganizerID,

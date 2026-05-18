@@ -63,6 +63,7 @@ func main() {
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
     clientHandler := handlers.NewClientHandler(mongoClient.Database)
+    uploadHandler := handlers.NewUploadHandler()
 
     // Создание роутера
     r := mux.NewRouter()
@@ -82,9 +83,16 @@ func main() {
     r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
     // Клиентские маршруты (публичные)
     r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
+
+    // Статические файлы для баннеров
+    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
+
+    // Для баннера
+    api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
 
     // Маршруты для клиентского модуля (друзья)
     api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
@@ -132,18 +140,20 @@ func main() {
         // Маршруты для темы
     api.HandleFunc("/client/theme", clientHandler.GetUserTheme).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/theme", clientHandler.UpdateUserTheme).Methods("PUT", "OPTIONS")
-        // Маршруты только для менеджеров
+
+    // Разрешить и менеджерам, и организаторам
     admin := api.PathPrefix("/admin").Subrouter()
-    admin.Use(middleware.RequireManager)
+    admin.Use(middleware.RequireRole("manager", "organizer"))  // ← измените здесь
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.UpdateTournament).Methods("PUT", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.DeleteTournament).Methods("DELETE", "OPTIONS")
-    admin.HandleFunc("/tournaments/{id:[0-9]+}/approve", tournamentHandler.ApproveTournament).Methods("POST", "OPTIONS")
 
     // Блокировки
     admin.HandleFunc("/bans", banHandler.ListActiveBans).Methods("GET", "OPTIONS")
     admin.HandleFunc("/bans", banHandler.CreateBan).Methods("POST", "OPTIONS")
     admin.HandleFunc("/bans/{user_id:[0-9]+}", banHandler.RemoveBan).Methods("DELETE", "OPTIONS")
     admin.HandleFunc("/bans/{user_id:[0-9]+}", banHandler.GetActiveBan).Methods("GET", "OPTIONS")
+
+
 
     // Запуск сервера
     port := "8080"

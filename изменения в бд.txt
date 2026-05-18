@@ -1,0 +1,5 @@
+18.05.2026
+15:03
+
+добавить в постгрес
+ALTER TABLE tournaments ADD COLUMN is_vip BOOLEAN DEFAULT FALSE;

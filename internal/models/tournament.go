@@ -30,6 +30,8 @@ type Tournament struct {
     ApprovedAt           *time.Time       `json:"approved_at,omitempty"`
     CreatedAt            time.Time        `json:"created_at"`
     UpdatedAt            time.Time        `json:"updated_at"`
+    IsVIP                bool             `json:"is_vip" db:"is_vip"`
+
 }
 
 type TournamentCreate struct {
@@ -41,6 +43,7 @@ type TournamentCreate struct {
     EntryFee             float64          `json:"entry_fee"`
     PrizePool            float64          `json:"prize_pool"`
     MaxTeams             int              `json:"max_teams"`
+    IsVIP                bool             `json:"is_vip"`
 }
 
 type TournamentUpdate struct {
@@ -50,7 +53,8 @@ type TournamentUpdate struct {
     StartDate            time.Time        `json:"start_date"`
     RegistrationDeadline time.Time        `json:"registration_deadline"`
     EntryFee             *float64         `json:"entry_fee"`
-    PrizePool            *float64         `json:"prize_pool"`
+    PrizePool            *float64         `json:"prize_pool"`   
     MaxTeams             *int             `json:"max_teams"`
     Status               TournamentStatus `json:"status"`
+    IsVIP                bool             `json:"is_vip"`
 }

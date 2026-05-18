@@ -41,6 +41,8 @@ export interface Tournament {
   registered_teams?: number;
   created_at: string;
   updated_at: string;
+  is_vip?: boolean;
+  banner_url?: string; // ← ДОБАВИТЬ
 }
 
 export interface TournamentCreate {
@@ -52,6 +54,8 @@ export interface TournamentCreate {
   entry_fee: number;
   prize_pool: number;
   max_teams: number;
+  is_vip?: boolean;
+  banner_url?: string; // ← ДОБАВИТЬ
 }
 
 export interface TournamentUpdate {
@@ -64,6 +68,8 @@ export interface TournamentUpdate {
   prize_pool?: number;
   max_teams?: number;
   status?: Tournament['status'];
+  is_vip?: boolean;
+  banner_url?: string; // ← ДОБАВИТЬ
 }
 
 // Заявка на турнир
@@ -101,16 +107,16 @@ export interface Ban {
 export interface BanRequest {
   user_id: number;
   reason: string;
-  expires_at?:  string | null;  
+  expires_at?: string | null;
 }
 
 // Сообщение чата
 export interface SupportMessage {
   id: number;
   user_id: number;
-  username?: string;        // добавили
+  username?: string;
   manager_id?: number;
-  manager_name?: string;    // добавили
+  manager_name?: string;
   message: string;
   is_from_user: boolean;
   is_read: boolean;
@@ -131,4 +137,15 @@ export interface Participant {
 
 export interface TournamentWithParticipants extends Tournament {
   participants: Participant[];
+}
+
+// Подписка
+export interface UserSubscription {
+  id: string;
+  user_id: number;
+  subscription_id: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+  auto_renew: boolean;
 }
