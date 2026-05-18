@@ -199,6 +199,8 @@ func (r *TournamentRepository) Delete(ctx context.Context, id int) error {
 
 // Approve - подтверждение турнира менеджером
 func (r *TournamentRepository) Approve(ctx context.Context, id int, managerID int) error {
+    fmt.Printf("Approve called: tournamentID=%d, managerID=%d\n", id, managerID)
+    
     query := `
         UPDATE tournaments
         SET status = $1, approved_by = $2, approved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
@@ -207,10 +209,14 @@ func (r *TournamentRepository) Approve(ctx context.Context, id int, managerID in
 
     result, err := r.db.Pool.Exec(ctx, query, models.TournamentStatusApproved, managerID, id, models.TournamentStatusPending)
     if err != nil {
+        fmt.Printf("SQL error: %v\n", err)
         return fmt.Errorf("failed to approve tournament: %w", err)
     }
 
-    if result.RowsAffected() == 0 {
+    rowsAffected := result.RowsAffected()
+    fmt.Printf("Rows affected: %d\n", rowsAffected)
+    
+    if rowsAffected == 0 {
         return fmt.Errorf("tournament with id %d not found or not pending", id)
     }
 
