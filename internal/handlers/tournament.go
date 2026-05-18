@@ -2,6 +2,7 @@ package handlers
 
 import (
     "encoding/json"
+    "fmt"
     "net/http"
     "strconv"
     "time"
@@ -17,7 +18,7 @@ type TournamentHandler struct {
     tournamentRepo   *repository.TournamentRepository
     userRepo         *repository.UserRepository
     registrationRepo *repository.RegistrationRepository
-    bracketRepo      *repository.BracketRepository  // добавить
+    bracketRepo      *repository.BracketRepository
 }
 
 func NewTournamentHandler(
@@ -36,18 +37,25 @@ func NewTournamentHandler(
 
 // CreateTournament - создание турнира (доступно организаторам и менеджерам)
 func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Request) {
-    log.Println("=== CreateTournament START ===")
-    
+    fmt.Println("=== CreateTournament START ===")
+
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    role, _ := middleware.GetUserRole(r.Context())
+
     var req models.TournamentCreate
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        log.Printf("Decode error: %v", err)
+        fmt.Printf("Decode error: %v\n", err)
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
-    
-    log.Printf("Received tournament: Title=%s, Game=%s, BannerURL=%v", 
+
+    fmt.Printf("Received tournament: Title=%s, Game=%s, BannerURL=%v\n",
         req.Title, req.Game, req.BannerURL)
-}
 
     // Проверка обязательных полей
     if req.Title == "" || req.Game == "" {
@@ -117,7 +125,6 @@ func (h *TournamentHandler) GetTournament(w http.ResponseWriter, r *http.Request
     }
 
     // Получаем количество зарегистрированных команд
-    // Временно ставим 0, позже добавим подсчет
     registeredTeams := 0
 
     response := struct {
@@ -270,13 +277,11 @@ func (h *TournamentHandler) GetTournamentWithRegistrations(w http.ResponseWriter
     w.Header().Set("Access-Control-Allow-Origin", "*")
     w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
     w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    
+
     if r.Method == "OPTIONS" {
         w.WriteHeader(http.StatusOK)
         return
     }
-    
-    // остальной код...
 
     vars := mux.Vars(r)
     id, err := strconv.Atoi(vars["id"])
@@ -315,28 +320,28 @@ func (h *TournamentHandler) GetTournamentWithRegistrations(w http.ResponseWriter
     for _, reg := range registrations {
         user, _ := h.userRepo.FindByID(r.Context(), reg.UserID)
         participants = append(participants, map[string]interface{}{
-            "id":         reg.ID,
-            "user_id":    reg.UserID,
-            "username":   user.Username,
-            "team_name":  reg.TeamName,
+            "id":            reg.ID,
+            "user_id":       reg.UserID,
+            "username":      user.Username,
+            "team_name":     reg.TeamName,
             "registered_at": reg.RegisteredAt,
         })
     }
 
     response := map[string]interface{}{
-        "id":                   tournament.ID,
-        "title":                tournament.Title,
-        "game":                 tournament.Game,
-        "description":          tournament.Description,
-        "start_date":           tournament.StartDate,
+        "id":                    tournament.ID,
+        "title":                 tournament.Title,
+        "game":                  tournament.Game,
+        "description":           tournament.Description,
+        "start_date":            tournament.StartDate,
         "registration_deadline": tournament.RegistrationDeadline,
-        "entry_fee":            tournament.EntryFee,
-        "prize_pool":           tournament.PrizePool,
-        "max_teams":            tournament.MaxTeams,
-        "status":               tournament.Status,
-        "organizer":            organizer.ToResponse(),
-        "participants":         participants,
-        "created_at":           tournament.CreatedAt,
+        "entry_fee":             tournament.EntryFee,
+        "prize_pool":            tournament.PrizePool,
+        "max_teams":             tournament.MaxTeams,
+        "status":                tournament.Status,
+        "organizer":             organizer.ToResponse(),
+        "participants":          participants,
+        "created_at":            tournament.CreatedAt,
     }
 
     w.Header().Set("Content-Type", "application/json")
@@ -354,13 +359,13 @@ func (h *TournamentHandler) SaveBracket(w http.ResponseWriter, r *http.Request) 
 
     var req struct {
         Matches []struct {
-            ID       string  `json:"id"`
-            Team1Id  *int    `json:"team1Id"`
-            Team2Id  *int    `json:"team2Id"`
-            WinnerId *int    `json:"winnerId"`
+            ID          string `json:"id"`
+            Team1Id     *int   `json:"team1Id"`
+            Team2Id     *int   `json:"team2Id"`
+            WinnerId    *int   `json:"winnerId"`
             NextMatchId string `json:"nextMatchId"`
-            Round    int     `json:"round"`
-            Position int     `json:"position"`
+            Round       int    `json:"round"`
+            Position    int    `json:"position"`
         } `json:"matches"`
         ChampionId *int `json:"championId"`
     }
@@ -413,13 +418,13 @@ func (h *TournamentHandler) GetBracket(w http.ResponseWriter, r *http.Request) {
     var responseMatches []map[string]interface{}
     for _, m := range matches {
         responseMatches = append(responseMatches, map[string]interface{}{
-            "id":           m.MatchID,
-            "team1Id":      m.Team1ID,
-            "team2Id":      m.Team2ID,
-            "winnerId":     m.WinnerID,
-            "nextMatchId":  m.NextMatchID,
-            "round":        m.RoundNumber,
-            "position":     m.Position,
+            "id":          m.MatchID,
+            "team1Id":     m.Team1ID,
+            "team2Id":     m.Team2ID,
+            "winnerId":    m.WinnerID,
+            "nextMatchId": m.NextMatchID,
+            "round":       m.RoundNumber,
+            "position":    m.Position,
         })
     }
 
