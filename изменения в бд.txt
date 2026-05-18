@@ -3,3 +3,6 @@
 
 добавить в постгрес
 ALTER TABLE tournaments ADD COLUMN is_vip BOOLEAN DEFAULT FALSE;
+
+
+ALTER TABLE tournaments ADD COLUMN banner_url VARCHAR(500) DEFAULT NULL;

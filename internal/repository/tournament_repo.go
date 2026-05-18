@@ -21,9 +21,9 @@ func NewTournamentRepository(db *db.PostgresDB) *TournamentRepository {
 // Create - создание нового турнира
 func (r *TournamentRepository) Create(ctx context.Context, tournament *models.TournamentCreate, organizerID int) (*models.Tournament, error) {
     query := `
-        INSERT INTO tournaments (title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, created_at, updated_at
+        INSERT INTO tournaments (title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url, created_at, updated_at
     `
 
     var newTournament models.Tournament
@@ -32,11 +32,13 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *models.To
         tournament.StartDate, tournament.RegistrationDeadline,
         tournament.EntryFee, tournament.PrizePool, tournament.MaxTeams,
         models.TournamentStatusPending, organizerID,
+        tournament.IsVIP, tournament.BannerURL,
     ).Scan(
         &newTournament.ID, &newTournament.Title, &newTournament.Game, &newTournament.Description,
         &newTournament.StartDate, &newTournament.RegistrationDeadline,
         &newTournament.EntryFee, &newTournament.PrizePool, &newTournament.MaxTeams,
         &newTournament.Status, &newTournament.OrganizerID,
+        &newTournament.IsVIP, &newTournament.BannerURL,
         &newTournament.CreatedAt, &newTournament.UpdatedAt,
     )
     if err != nil {
@@ -76,7 +78,7 @@ func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.To
 // List - список турниров с фильтрацией и пагинацией
 func (r *TournamentRepository) List(ctx context.Context, game string, status models.TournamentStatus, limit, offset int) ([]*models.Tournament, error) {
     query := `
-        SELECT id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, created_at, updated_at
+        SELECT id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url, created_at, updated_at
         FROM tournaments
         WHERE ($1 = '' OR game = $1)
           AND ($2 = '' OR status = $2)
@@ -99,6 +101,7 @@ func (r *TournamentRepository) List(ctx context.Context, game string, status mod
             &t.StartDate, &t.RegistrationDeadline,
             &t.EntryFee, &t.PrizePool, &t.MaxTeams,
             &t.Status, &t.OrganizerID,
+            &t.IsVIP, &t.BannerURL,
             &t.CreatedAt, &t.UpdatedAt,
         )
         if err != nil {

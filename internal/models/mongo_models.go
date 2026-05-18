@@ -23,6 +23,8 @@ type TournamentMongo struct {
     NumberRounds int    `bson:"number_rounds"`
     WinnerTeam   string `bson:"winner_team"`
     Info         string `bson:"info_tournament"`
+    IsVIP        bool    `bson:"is_vip"`      
+    BannerURL    *string `bson:"banner_url"`
 }
 
 type RoundTournamentMongo struct {

@@ -4,7 +4,9 @@ import (
     "context"
     "log"
     "net/http"
+    "path/filepath"
 
+    "esports-manager/internal/utils"
     "esports-manager/internal/config"
     "esports-manager/internal/db"
     "esports-manager/internal/handlers"
@@ -68,10 +70,17 @@ func main() {
     // Создание роутера
     r := mux.NewRouter()
 
+    projectRoot := utils.GetProjectRoot()
+    uploadsPath := filepath.Join(projectRoot, "uploads")
+    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
+
     // Добавляем CORS middleware для всех маршрутов
     r.Use(middleware.CORS)
 
-    // Публичные маршруты (не требуют авторизации)
+     // Статические файлы для загруженных баннеров
+    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
+
+    // Публичные маршруты (не требуют авторизации)  
     r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
     r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
     r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -84,8 +93,6 @@ func main() {
     // Клиентские маршруты (публичные)
     r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
 
-    // Статические файлы для баннеров
-    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("./uploads"))))
 
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()

@@ -6,12 +6,7 @@ import {
   Typography,
   Box,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
+  Grid,
   Button,
   IconButton,
   Dialog,
@@ -35,8 +30,11 @@ import {
   Tooltip,
   Divider,
   Card,
-  CardMedia,
+  CardContent,
+  CardActions,
   Stack,
+  CardActionArea,
+  alpha,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -53,6 +51,11 @@ import {
   CloudUpload as CloudUploadIcon,
   Delete as DeleteIconOutline,
   Image as ImageIcon,
+  CalendarToday as CalendarIcon,
+  Groups as GroupsIcon,
+  SportsEsports as GameIcon,
+  Paid as PaidIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { tournamentsApi } from '../api/tournaments';
 import { Tournament, TournamentCreate, UserSubscription } from '../types';
@@ -75,7 +78,6 @@ const MyTournaments: React.FC = () => {
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Состояния для ошибок внутри формы
   const [formErrors, setFormErrors] = useState<{
     title?: string;
     game?: string;
@@ -101,7 +103,6 @@ const MyTournaments: React.FC = () => {
     banner_url: '',
   });
 
-  // Проверка подписки организатора
   useEffect(() => {
     checkSubscription();
   }, []);
@@ -150,7 +151,6 @@ const MyTournaments: React.FC = () => {
     }
   };
 
-  // Загрузка баннера на сервер
   const uploadBanner = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('banner', file);
@@ -166,7 +166,8 @@ const MyTournaments: React.FC = () => {
       });
       
       if (!response.ok) {
-        throw new Error('Ошибка загрузки баннера');
+        const errorText = await response.text();
+        throw new Error(errorText);
       }
       
       const data = await response.json();
@@ -181,13 +182,11 @@ const MyTournaments: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Проверка типа файла
     if (!file.type.startsWith('image/')) {
       setFormErrors(prev => ({ ...prev, banner: 'Пожалуйста, выберите изображение' }));
       return;
     }
     
-    // Проверка размера (максимум 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setFormErrors(prev => ({ ...prev, banner: 'Размер изображения не должен превышать 5MB' }));
       return;
@@ -196,7 +195,6 @@ const MyTournaments: React.FC = () => {
     setBannerFile(file);
     setFormErrors(prev => ({ ...prev, banner: undefined }));
     
-    // Создаем превью
     const reader = new FileReader();
     reader.onloadend = () => {
       setBannerPreview(reader.result as string);
@@ -254,7 +252,7 @@ const MyTournaments: React.FC = () => {
     });
     
     if (tournament.banner_url) {
-      setBannerPreview(tournament.banner_url);
+      setBannerPreview(`http://localhost:8080${tournament.banner_url}`);
     }
     
     const predefinedGames = ['CS2', 'Dota 2', 'Valorant', 'League of Legends', 'Overwatch 2', 'PUBG', 'Fortnite'];
@@ -279,7 +277,6 @@ const MyTournaments: React.FC = () => {
     }
   };
 
-  // Валидация формы перед отправкой
   const validateForm = (): boolean => {
     const errors: typeof formErrors = {};
     
@@ -356,13 +353,6 @@ const MyTournaments: React.FC = () => {
     setUploadingBanner(true);
     
     try {
-      let bannerUrl = formData.banner_url;
-      
-      // Загружаем баннер, если он был выбран
-      if (bannerFile) {
-        bannerUrl = await uploadBanner(bannerFile);
-      }
-      
       let startDate: Date | null = null;
       let deadlineDate: Date | null = null;
       let startDateISO = '';
@@ -385,6 +375,11 @@ const MyTournaments: React.FC = () => {
       
       const entryFee = isPaidTournament ? formData.entry_fee : 0;
       const prizePool = isPaidTournament ? formData.prize_pool : 0;
+      
+      let bannerUrl = formData.banner_url;
+      if (bannerFile) {
+        bannerUrl = await uploadBanner(bannerFile);
+      }
       
       const dataToSend = {
         title: formData.title,
@@ -416,6 +411,7 @@ const MyTournaments: React.FC = () => {
         
         if (Object.keys(updateData).length === 0) {
           setOpenDialog(false);
+          setUploadingBanner(false);
           return;
         }
         
@@ -495,6 +491,11 @@ const MyTournaments: React.FC = () => {
     navigate('/profile');
   };
 
+  const handleThemes = () => {
+    handleMenuClose();
+    navigate('/themes');
+  };
+
   const handleMessenger = () => {
     navigate('/messenger');
   };
@@ -509,7 +510,7 @@ const MyTournaments: React.FC = () => {
 
   const getStatusChip = (status: string) => {
     const statusMap: Record<string, { label: string; color: any }> = {
-      pending: { label: 'Ожидает модерации', color: 'warning' },
+      pending: { label: 'Ожидает', color: 'warning' },
       approved: { label: 'Одобрен', color: 'success' },
       ongoing: { label: 'Идёт', color: 'info' },
       completed: { label: 'Завершён', color: 'default' },
@@ -519,12 +520,30 @@ const MyTournaments: React.FC = () => {
     return <Chip label={label} color={color} size="small" />;
   };
 
+  const getStatusColor = (status: string) => {
+    const colorMap: Record<string, string> = {
+      pending: '#ff9800',
+      approved: '#4caf50',
+      ongoing: '#2196f3',
+      completed: '#9e9e9e',
+      cancelled: '#f44336',
+    };
+    return colorMap[status] || '#9e9e9e';
+  };
+
+  // Функция для получения полного URL баннера
+  const getBannerUrl = (url: string | undefined): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return `http://localhost:8080${url}`;
+  };
+
   return (
     <>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            🎮 Мои турниры
+          <Typography variant="h6" sx={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate('/client/tournaments')}>
+            🎮 Киберспортивная платформа
           </Typography>
           
           {isAuthenticated && (
@@ -532,11 +551,11 @@ const MyTournaments: React.FC = () => {
               <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
                 Мессенджер
               </Button>
-              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 2 }}>
+              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
                 Подписка
               </Button>
               
-              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
+              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 2 }} onClick={handleMenuOpen}>
                 <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
                   {user?.username?.[0]?.toUpperCase() || 'U'}
                 </Avatar>
@@ -548,9 +567,14 @@ const MyTournaments: React.FC = () => {
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
                 onClose={handleMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
               >
                 <MenuItem onClick={handleProfile}>
                   <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
+                </MenuItem>
+                <MenuItem onClick={handleThemes}>
+                  <ImageIcon sx={{ mr: 1 }} /> Темы
                 </MenuItem>
                 <MenuItem onClick={handleLogout}>
                   <LogoutIcon sx={{ mr: 1 }} /> Выйти
@@ -561,7 +585,7 @@ const MyTournaments: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg">
+      <Container maxWidth="xl">
         <Box sx={{ mt: 4 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
@@ -571,13 +595,24 @@ const MyTournaments: React.FC = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={handleOpenCreate}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                },
+              }}
             >
               Создать турнир
             </Button>
           </Box>
 
-          <Typography variant="h4" gutterBottom>
+          <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 4 }}>
             Мои турниры
+            <Chip 
+              label={`${tournaments.length} турниров`} 
+              size="small" 
+              sx={{ ml: 2, verticalAlign: 'middle' }}
+            />
           </Typography>
 
           {pageError && (
@@ -587,82 +622,176 @@ const MyTournaments: React.FC = () => {
           )}
 
           {loading ? (
-            <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
+            <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
               <CircularProgress />
             </Box>
           ) : tournaments.length === 0 ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <EmojiEventsIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary" gutterBottom>
+            <Paper sx={{ p: 8, textAlign: 'center' }}>
+              <EmojiEventsIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h5" color="text.secondary" gutterBottom>
                 У вас пока нет турниров
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Создайте свой первый турнир!
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                Создайте свой первый турнир и начните управлять им!
               </Typography>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+              <Button 
+                variant="contained" 
+                startIcon={<AddIcon />} 
+                onClick={handleOpenCreate}
+                size="large"
+              >
                 Создать турнир
               </Button>
             </Paper>
           ) : (
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                    <TableCell><strong>ID</strong></TableCell>
-                    <TableCell><strong>Баннер</strong></TableCell>
-                    <TableCell><strong>Название</strong></TableCell>
-                    <TableCell><strong>Игра</strong></TableCell>
-                    <TableCell><strong>Дата начала</strong></TableCell>
-                    <TableCell><strong>Взнос</strong></TableCell>
-                    <TableCell><strong>Призовой фонд</strong></TableCell>
-                    <TableCell><strong>Статус</strong></TableCell>
-                    <TableCell><strong>VIP</strong></TableCell>
-                    <TableCell align="center"><strong>Действия</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tournaments.map((tournament) => (
-                    <TableRow key={tournament.id} hover sx={tournament.is_vip ? { backgroundColor: 'rgba(255, 215, 0, 0.05)' } : {}}>
-                      <TableCell>{tournament.id}</TableCell>
-                      <TableCell>
-                        {tournament.banner_url ? (
-                          <Avatar 
-                            src={tournament.banner_url} 
-                            variant="rounded" 
-                            sx={{ width: 50, height: 50 }}
-                          />
-                        ) : (
-                          <ImageIcon color="disabled" />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="text"
-                          onClick={() => navigate(`/tournaments/${tournament.id}`)}
-                          sx={{ textTransform: 'none', p: 0, fontWeight: 'normal' }}
+            <Grid container spacing={3}>
+              {tournaments.map((tournament) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={tournament.id}>
+                  <Card 
+                    sx={{ 
+                      height: '100%', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: (theme) => theme.shadows[8],
+                      },
+                      position: 'relative',
+                      overflow: 'visible',
+                    }}
+                  >
+                    {/* VIP бейдж */}
+                    {tournament.is_vip && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: -10,
+                          right: -10,
+                          zIndex: 1,
+                        }}
+                      >
+                        <Tooltip title="VIP Турнир">
+                          <DiamondIcon sx={{ color: 'gold', fontSize: 40 }} />
+                        </Tooltip>
+                      </Box>
+                    )}
+                    
+                    {/* Баннер или заглушка */}
+                    <CardActionArea onClick={() => navigate(`/tournaments/${tournament.id}`)}>
+                      {tournament.banner_url ? (
+                        <Box
+                          sx={{
+                            height: 160,
+                            backgroundColor: '#f5f5f5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                          }}
                         >
-                          {tournament.title}
-                        </Button>
-                      </TableCell>
-                      <TableCell>{tournament.game}</TableCell>
-                      <TableCell>{new Date(tournament.start_date).toLocaleString()}</TableCell>
-                      <TableCell>
-                        {tournament.entry_fee > 0 ? `${tournament.entry_fee} ₽` : 'Бесплатно'}
-                      </TableCell>
-                      <TableCell>
-                        {tournament.prize_pool > 0 ? `${tournament.prize_pool.toLocaleString()} ₽` : '—'}
-                      </TableCell>
-                      <TableCell>{getStatusChip(tournament.status)}</TableCell>
-                      <TableCell>
-                        {tournament.is_vip ? (
-                          <Tooltip title="VIP Турнир">
-                            <DiamondIcon sx={{ color: 'gold' }} />
-                          </Tooltip>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">—</Typography>
+                          <img
+                            src={getBannerUrl(tournament.banner_url)}
+                            alt={tournament.title}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                            onError={(e) => {
+                              console.error('Failed to load banner:', tournament.banner_url);
+                              e.currentTarget.style.display = 'none';
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                parent.style.background = `linear-gradient(135deg, ${getStatusColor(tournament.status)} 0%, ${alpha(getStatusColor(tournament.status), 0.7)} 100%)`;
+                                parent.style.display = 'flex';
+                                parent.style.alignItems = 'center';
+                                parent.style.justifyContent = 'center';
+                              }
+                            }}
+                          />
+                        </Box>
+                      ) : (
+                        <Box
+                          sx={{
+                            height: 160,
+                            background: `linear-gradient(135deg, ${getStatusColor(tournament.status)} 0%, ${alpha(getStatusColor(tournament.status), 0.7)} 100%)`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <EmojiEventsIcon sx={{ fontSize: 64, color: 'white', opacity: 0.8 }} />
+                        </Box>
+                      )}
+                      
+                      {/* Статус на баннере */}
+                      <Chip
+                        label={getStatusChip(tournament.status).props.label}
+                        size="small"
+                        sx={{
+                          position: 'absolute',
+                          top: 16,
+                          right: 16,
+                          backgroundColor: getStatusColor(tournament.status),
+                          color: 'white',
+                          fontWeight: 'bold',
+                        }}
+                      />
+                    </CardActionArea>
+                    
+                    <CardContent sx={{ flexGrow: 1 }}>
+                      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, minHeight: 64 }}>
+                        {tournament.title}
+                      </Typography>
+                      
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <GameIcon fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            {tournament.game}
+                          </Typography>
+                        </Box>
+                        
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <CalendarIcon fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            {new Date(tournament.start_date).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                        
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <GroupsIcon fontSize="small" color="action" />
+                          <Typography variant="body2" color="text.secondary">
+                            {tournament.max_teams} команд
+                          </Typography>
+                        </Box>
+                        
+                        {(tournament.entry_fee > 0 || tournament.prize_pool > 0) && (
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <PaidIcon fontSize="small" color="success" />
+                            <Typography variant="body2" color="success.main">
+                              {tournament.entry_fee > 0 && `${tournament.entry_fee} ₽ взнос`}
+                              {tournament.entry_fee > 0 && tournament.prize_pool > 0 && ' • '}
+                              {tournament.prize_pool > 0 && `${tournament.prize_pool.toLocaleString()} ₽ приз`}
+                            </Typography>
+                          </Box>
                         )}
-                      </TableCell>
-                      <TableCell align="center">
+                      </Stack>
+                    </CardContent>
+                    
+                    <Divider />
+                    
+                    <CardActions sx={{ p: 2, justifyContent: 'space-between' }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<VisibilityIcon />}
+                        onClick={() => navigate(`/tournaments/${tournament.id}`)}
+                      >
+                        Подробнее
+                      </Button>
+                      <Box>
                         <IconButton
                           size="small"
                           color="primary"
@@ -679,12 +808,12 @@ const MyTournaments: React.FC = () => {
                         >
                           <DeleteIcon />
                         </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      </Box>
+                    </CardActions>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
           )}
         </Box>
       </Container>
@@ -719,11 +848,11 @@ const MyTournaments: React.FC = () => {
             
             {bannerPreview ? (
               <Card sx={{ mb: 2, position: 'relative' }}>
-                <CardMedia
+                <Box
                   component="img"
-                  image={bannerPreview}
+                  src={bannerPreview}
                   alt="Баннер турнира"
-                  sx={{ height: 150, objectFit: 'cover' }}
+                  sx={{ height: 150, width: '100%', objectFit: 'cover' }}
                 />
                 <IconButton
                   size="small"

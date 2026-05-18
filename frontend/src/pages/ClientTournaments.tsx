@@ -20,6 +20,7 @@ import {
   Menu,
   MenuItem,
   Avatar,
+  Chip
 } from '@mui/material';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -367,6 +368,7 @@ const ClientTournaments: React.FC = () => {
                       <TableCell>{tournament.number_rounds}</TableCell>
                       <TableCell>{tournament.info_tournament || '—'}</TableCell>
                       <TableCell align="center">
+                      {user?.role === 'user' ? (
                         <Button
                           variant="contained"
                           color="primary"
@@ -380,15 +382,34 @@ const ClientTournaments: React.FC = () => {
                               background: 'linear-gradient(135deg, #5eeaff 0%, #00d4ff 100%)',
                               boxShadow: '0 0 20px rgba(0, 212, 255, 0.7)',
                             },
-                            '&.Mui-disabled': {
-                              background: 'rgba(0, 212, 255, 0.3)',
-                              color: '#ffffff'
-                            }
                           }}
                         >
                           {registering === tournament.id ? 'РЕГИСТРАЦИЯ...' : 'ЗАРЕГИСТРИРОВАТЬСЯ'}
                         </Button>
-                      </TableCell>
+                      ) : user?.role === 'organizer' ? (
+                        <Chip 
+                          label="Организатор" 
+                          color="primary" 
+                          variant="outlined"
+                          size="small"
+                        />
+                      ) : user?.role === 'manager' ? (
+                        <Chip 
+                          label="Менеджер" 
+                          color="secondary" 
+                          variant="outlined"
+                          size="small"
+                        />
+                      ) : (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => navigate('/login')}
+                        >
+                          Войти для регистрации
+                        </Button>
+                      )}
+                    </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

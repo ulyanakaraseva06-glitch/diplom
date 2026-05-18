@@ -31,6 +31,7 @@ type Tournament struct {
     CreatedAt            time.Time        `json:"created_at"`
     UpdatedAt            time.Time        `json:"updated_at"`
     IsVIP                bool             `json:"is_vip" db:"is_vip"`
+    BannerURL            *string          `json:"banner_url,omitempty"`
 
 }
 
@@ -44,6 +45,7 @@ type TournamentCreate struct {
     PrizePool            float64          `json:"prize_pool"`
     MaxTeams             int              `json:"max_teams"`
     IsVIP                bool             `json:"is_vip"`
+    BannerURL            *string          `json:"banner_url,omitempty"`
 }
 
 type TournamentUpdate struct {

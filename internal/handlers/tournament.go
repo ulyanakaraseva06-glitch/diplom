@@ -36,19 +36,18 @@ func NewTournamentHandler(
 
 // CreateTournament - создание турнира (доступно организаторам и менеджерам)
 func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    role, _ := middleware.GetUserRole(r.Context())
-
+    log.Println("=== CreateTournament START ===")
+    
     var req models.TournamentCreate
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        log.Printf("Decode error: %v", err)
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
+    
+    log.Printf("Received tournament: Title=%s, Game=%s, BannerURL=%v", 
+        req.Title, req.Game, req.BannerURL)
+}
 
     // Проверка обязательных полей
     if req.Title == "" || req.Game == "" {

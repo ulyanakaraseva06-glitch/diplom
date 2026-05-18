@@ -94,6 +94,8 @@ func (s *SyncService) SyncAll(ctx context.Context) error {
                 NumberRounds: rounds,
                 WinnerTeam:   "",
                 Info:         "",
+                IsVIP:        t.IsVIP,
+                BannerURL:    t.BannerURL,
             }
             _, err = s.mongoTournaments.InsertOne(ctx, mongoTournament)
             if err != nil {

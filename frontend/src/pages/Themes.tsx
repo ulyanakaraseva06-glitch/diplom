@@ -128,9 +128,11 @@ const Themes: React.FC = () => {
               <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
                 Подписка
               </Button>
+              {user?.role === 'user' && (
               <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
                 Друзья
               </Button>
+              )}
               
               <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
                 <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
