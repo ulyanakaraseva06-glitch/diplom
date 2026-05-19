@@ -286,7 +286,6 @@ const handleSelectChange = (e: any) => {
               <MenuItem value="full_ban">Полная блокировка аккаунта</MenuItem>
               <MenuItem value="tournament_ban">Запрет на участие в турнирах</MenuItem>
               <MenuItem value="chat_ban">Запрет на отправку сообщений</MenuItem>
-              <MenuItem value="team_ban">Запрет на создание команд</MenuItem>
               <MenuItem value="warning">Предупреждение</MenuItem>
             </Select>
           </FormControl>
