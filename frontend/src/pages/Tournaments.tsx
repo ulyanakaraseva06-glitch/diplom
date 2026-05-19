@@ -32,6 +32,8 @@ import {
   Stack,
   Card,
   CardMedia,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import Papa from 'papaparse';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -43,9 +45,9 @@ import {
   Search as SearchIcon,
   Home as HomeIcon,
   CloudUpload as CloudUploadIcon,
-  Delete as DeleteOutlineIcon,
+  Delete as DeleteOutlineIcon,  
 } from '@mui/icons-material';
-
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 const POPULAR_GAMES = [
   'Counter-Strike 2',
   'Dota 2',
@@ -828,7 +830,27 @@ const uploadBanner = async (file: File): Promise<string> => {
             helperText={formErrors.prize_pool || "Общая сумма призовых"}
             inputProps={{ min: 0 }}
           />
+          <FormControlLabel
+  control={
+    <Switch
+      checked={formData.is_vip || false}
+      onChange={(e) => setFormData(prev => ({ ...prev, is_vip: e.target.checked }))}
+      color="warning"
+    />
+  }
+  label={
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <EmojiEventsIcon sx={{ color: 'gold' }} />
+      <Typography variant="subtitle1">VIP статус турнира</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+        VIP турниры получают повышенную видимость
+      </Typography>
+    </Box>
+  }
+/>
         </DialogContent>
+
+        
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Отмена</Button>
           <Button 
