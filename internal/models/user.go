@@ -38,6 +38,7 @@ type UserResponse struct {
     Email     string    `json:"email"`
     Username  string    `json:"username"`
     Role      UserRole  `json:"role"`
+    AvatarURL string    `json:"avatar_url,omitempty"`
     CreatedAt time.Time `json:"created_at"`
 }
 

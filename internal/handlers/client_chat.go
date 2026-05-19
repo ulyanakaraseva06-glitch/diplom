@@ -18,11 +18,13 @@ import (
 const supportChatID = 0
 
 type chatPreview struct {
-	ID           int       `json:"id"`
-	Username     string    `json:"username"`
-	AvatarURL    string    `json:"avatar_url"`
-	IsSupport    bool      `json:"is_support"`
-	LastMessage  string    `json:"last_message,omitempty"`
+	ID            int       `json:"id"`
+	Username      string    `json:"username"`
+	AvatarURL     string    `json:"avatar_url"`
+	IsSupport     bool      `json:"is_support"`
+	IsTeam        bool      `json:"is_team"`
+	TeamID        string    `json:"team_id,omitempty"`
+	LastMessage   string    `json:"last_message,omitempty"`
 	LastMessageAt time.Time `json:"last_message_at,omitempty"`
 }
 
@@ -44,6 +46,29 @@ func (h *ClientHandler) ListChats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	teamCursor, _ := h.mongoDB.Collection("teams").Find(r.Context(), bson.M{"member_ids": userID})
+	for teamCursor.Next(r.Context()) {
+		var t models.TeamMongo
+		if teamCursor.Decode(&t) != nil {
+			continue
+		}
+		chats = append(chats, chatPreview{
+			ID: t.ChatPeerID, Username: t.Name, AvatarURL: t.AvatarURL,
+			IsSupport: false, IsTeam: true, TeamID: t.ID,
+		})
+	}
+	teamCursor.Close(r.Context())
+
+	hidden := h.hiddenPeerSet(r.Context(), userID)
+	filteredTeams := []chatPreview{chats[0]}
+	for _, c := range chats[1:] {
+		if c.IsTeam && hidden[c.ID] {
+			continue
+		}
+		filteredTeams = append(filteredTeams, c)
+	}
+	chats = filteredTeams
+
 	cursor, _ := h.mongoDB.Collection("friends").Find(r.Context(), bson.M{"user_id": userID})
 	defer cursor.Close(r.Context())
 	for cursor.Next(r.Context()) {
@@ -56,18 +81,19 @@ func (h *ClientHandler) ListChats(w http.ResponseWriter, r *http.Request) {
 		if err != nil || u == nil || u.Role != models.RoleUser {
 			continue
 		}
-		avatar := ""
-		var mu models.UserMongo
-		_ = h.mongoDB.Collection("users").FindOne(r.Context(), bson.M{"id": fid}).Decode(&mu)
-		avatar = mu.AvatarURL
-		chats = append(chats, chatPreview{ID: fid, Username: u.Username, AvatarURL: avatar})
+		if hidden[fid] {
+			continue
+		}
+		chats = append(chats, chatPreview{
+			ID: fid, Username: u.Username, AvatarURL: h.mongoAvatarURL(r.Context(), fid),
+		})
 	}
 
 	search := r.URL.Query().Get("search")
 	if search != "" {
 		filtered := []chatPreview{chats[0]}
 		for _, c := range chats[1:] {
-			if containsIgnoreCase(c.Username, search) {
+			if containsIgnoreCase(c.Username, search) || (c.IsTeam && containsIgnoreCase("команда", search)) {
 				filtered = append(filtered, c)
 			}
 		}
@@ -116,6 +142,33 @@ func (h *ClientHandler) GetChatMessages(w http.ResponseWriter, r *http.Request) 
 			out = append(out, messageView{
 				ID: m.ID, Text: text, ImageURL: img,
 				FromMe: m.IsFromUser, IsSupport: true, CreatedAt: m.CreatedAt,
+			})
+		}
+	} else if peerID < 0 {
+		team, err := h.findTeamByChatPeerID(r.Context(), peerID)
+		if err != nil || !h.isTeamMember(team, userID) {
+			http.Error(w, "Team not found", http.StatusForbidden)
+			return
+		}
+		opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}}).SetLimit(200)
+		cursor, err := h.mongoDB.Collection("team_messages").Find(r.Context(), bson.M{"team_id": team.ID}, opts)
+		if err != nil {
+			http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+			return
+		}
+		defer cursor.Close(r.Context())
+		for cursor.Next(r.Context()) {
+			var tm models.TeamMessageMongo
+			if cursor.Decode(&tm) != nil {
+				continue
+			}
+			uname := "Игрок"
+			if u, _ := h.userRepo.FindByID(r.Context(), tm.UserID); u != nil {
+				uname = u.Username
+			}
+			out = append(out, messageView{
+				ID: tm.ID, Text: tm.Text, ImageURL: tm.ImageURL,
+				FromMe: tm.UserID == userID, CreatedAt: tm.CreatedAt, Username: uname,
 			})
 		}
 	} else {
@@ -207,10 +260,34 @@ func (h *ClientHandler) SendChatMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if peerID < 0 {
+		team, err := h.findTeamByChatPeerID(r.Context(), peerID)
+		if err != nil || !h.isTeamMember(team, userID) {
+			http.Error(w, "Team not found", http.StatusForbidden)
+			return
+		}
+		_, _ = h.mongoDB.Collection("hidden_chats").DeleteOne(r.Context(), bson.M{"user_id": userID, "peer_id": peerID})
+		tm := models.TeamMessageMongo{
+			ID: newMongoID(), TeamID: team.ID, UserID: userID,
+			Text: req.Text, ImageURL: req.ImageURL, CreatedAt: now,
+		}
+		if _, err := h.mongoDB.Collection("team_messages").InsertOne(r.Context(), tm); err != nil {
+			http.Error(w, "Failed to send", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(messageView{
+			ID: tm.ID, Text: tm.Text, ImageURL: tm.ImageURL, FromMe: true, CreatedAt: tm.CreatedAt,
+		})
+		return
+	}
+
 	if !h.getFriendIDSet(r.Context(), userID)[peerID] {
 		http.Error(w, "Not friends", http.StatusForbidden)
 		return
 	}
+
+	_, _ = h.mongoDB.Collection("hidden_chats").DeleteOne(r.Context(), bson.M{"user_id": userID, "peer_id": peerID})
 
 	dm := models.DirectMessageMongo{
 		ID: newMongoID(), FromUserID: userID, ToUserID: peerID,

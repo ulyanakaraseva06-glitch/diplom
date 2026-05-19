@@ -225,8 +225,16 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
         }
     }
 
+    resp := user.ToResponse()
+    if h.mongoDB != nil {
+        ch := ClientHandler{mongoDB: h.mongoDB, userRepo: h.userRepo}
+        if p, err := ch.ensureMongoUser(r.Context(), userID); err == nil {
+            resp.AvatarURL = p.AvatarURL
+        }
+    }
+
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(user.ToResponse())
+    json.NewEncoder(w).Encode(resp)
 }
 
 // UpdateUser - обновление данных пользователя (только username)

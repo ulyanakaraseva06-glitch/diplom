@@ -27,12 +27,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+
+    const init = async () => {
+      if (savedToken && savedUser) {
+        setToken(savedToken);
+        const parsed = JSON.parse(savedUser) as User;
+        setUser(parsed);
+        try {
+          const res = await fetch('http://localhost:8080/api/auth/me', {
+            headers: { Authorization: `Bearer ${savedToken}` },
+          });
+          if (res.ok) {
+            const me = await res.json();
+            const merged = { ...parsed, ...me };
+            setUser(merged);
+            localStorage.setItem('user', JSON.stringify(merged));
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      setIsLoading(false);
+    };
+    init();
   }, []);
 
   const login = async (data: LoginRequest) => {

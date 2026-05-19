@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -19,12 +20,17 @@ import {
 import SendIcon from '@mui/icons-material/Send';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import PersonIcon from '@mui/icons-material/Person';
+import GroupsIcon from '@mui/icons-material/Groups';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import NavBar from '../components/NavBar';
 import EmojiPicker from '../components/EmojiPicker';
 import { clientApi, ChatPreview, ChatMessage } from '../api/clientApi';
+import { mediaUrl } from '../utils/media';
+import { confirmDelete } from '../utils/confirmDelete';
 
 const Messenger: React.FC = () => {
+  const location = useLocation();
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [chatSearch, setChatSearch] = useState('');
   const [selected, setSelected] = useState<ChatPreview | null>(null);
@@ -67,6 +73,15 @@ const Messenger: React.FC = () => {
     loadMessages(chat);
   };
 
+  useEffect(() => {
+    const peerId = (location.state as { chatPeerId?: number })?.chatPeerId;
+    if (peerId == null) return;
+    clientApi.getChats().then((list) => {
+      const chat = list.find((c) => c.id === peerId);
+      if (chat) handleSelect(chat);
+    });
+  }, [location.state]);
+
   const handleSend = async (imageUrl?: string) => {
     if (!selected || (!text.trim() && !imageUrl)) return;
     setSending(true);
@@ -79,6 +94,24 @@ const Messenger: React.FC = () => {
       alert('Не удалось отправить сообщение');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!selected) return;
+    if (selected.is_support) {
+      alert('Чат поддержки нельзя удалить');
+      return;
+    }
+    if (!confirmDelete()) return;
+    try {
+      await clientApi.deleteChat(selected.id);
+      setSelected(null);
+      setMessages([]);
+      await loadChats();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Не удалось удалить чат';
+      alert(msg);
     }
   };
 
@@ -118,18 +151,26 @@ const Messenger: React.FC = () => {
               <List sx={{ overflow: 'auto', flex: 1 }}>
                 {(chats ?? []).map((c) => (
                   <ListItemButton
-                    key={c.id}
+                    key={c.is_team ? `team-${c.team_id}` : c.id}
                     selected={selected?.id === c.id}
                     onClick={() => handleSelect(c)}
                   >
                     <ListItemAvatar>
-                      <Avatar src={c.avatar_url || undefined}>
-                        {c.is_support ? <SupportAgentIcon /> : <PersonIcon />}
+                      <Avatar src={mediaUrl(c.avatar_url)}>
+                        {c.is_support ? (
+                          <SupportAgentIcon />
+                        ) : c.is_team ? (
+                          <GroupsIcon />
+                        ) : (
+                          <PersonIcon />
+                        )}
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={c.username}
-                      secondary={c.is_support ? 'Служба поддержки' : 'Игрок'}
+                      secondary={
+                        c.is_support ? 'Служба поддержки' : c.is_team ? 'Командный чат' : 'Игрок'
+                      }
                     />
                   </ListItemButton>
                 ))}
@@ -143,12 +184,37 @@ const Messenger: React.FC = () => {
                 </Box>
               ) : (
                 <>
-                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
-                    <Typography variant="h6">{selected.username}</Typography>
-                    {selected.is_support && (
-                      <Typography variant="caption" color="text.secondary">
-                        Сообщения видны менеджеру в панели поддержки
-                      </Typography>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                      bgcolor: 'action.hover',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="h6">{selected.username}</Typography>
+                      {selected.is_support && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Сообщения видны менеджеру в панели поддержки
+                        </Typography>
+                      )}
+                      {selected.is_team && (
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Групповой чат команды
+                        </Typography>
+                      )}
+                    </Box>
+                    {!selected.is_support && (
+                      <Tooltip title={selected.is_team ? 'Скрыть чат' : 'Удалить чат'}>
+                        <IconButton color="error" onClick={handleDeleteChat} aria-label="Удалить чат">
+                          <DeleteOutlineIcon />
+                        </IconButton>
+                      </Tooltip>
                     )}
                   </Box>
 
@@ -169,11 +235,16 @@ const Messenger: React.FC = () => {
                               color: msg.from_me ? 'primary.contrastText' : 'text.primary',
                             }}
                           >
+                            {!msg.from_me && msg.username && selected.is_team && (
+                              <Typography variant="caption" sx={{ fontWeight: 700, display: 'block' }}>
+                                {msg.username}
+                              </Typography>
+                            )}
                             {msg.text && <Typography variant="body2">{msg.text}</Typography>}
                             {msg.image_url && (
                               <Box
                                 component="img"
-                                src={msg.image_url}
+                                src={mediaUrl(msg.image_url)}
                                 alt="вложение"
                                 sx={{ maxWidth: '100%', borderRadius: 1, mt: msg.text ? 1 : 0 }}
                               />

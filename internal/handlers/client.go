@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"time"
 
@@ -17,10 +16,11 @@ import (
 )
 
 type ClientHandler struct {
-	mongoDB        *mongo.Database
-	userRepo       *repository.UserRepository
-	supportRepo    *repository.SupportRepository
-	tournamentRepo *repository.TournamentRepository
+	mongoDB          *mongo.Database
+	userRepo         *repository.UserRepository
+	supportRepo      *repository.SupportRepository
+	tournamentRepo   *repository.TournamentRepository
+	registrationRepo *repository.RegistrationRepository
 }
 
 func NewClientHandler(
@@ -28,69 +28,13 @@ func NewClientHandler(
 	userRepo *repository.UserRepository,
 	supportRepo *repository.SupportRepository,
 	tournamentRepo *repository.TournamentRepository,
+	registrationRepo *repository.RegistrationRepository,
 ) *ClientHandler {
 	return &ClientHandler{
 		mongoDB: mongoDB, userRepo: userRepo,
 		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
+		registrationRepo: registrationRepo,
 	}
-}
-
-type clientTournamentView struct {
-	ID                   int     `json:"id"`
-	Title                string  `json:"title"`
-	Game                 string  `json:"game"`
-	MaxTeams             int     `json:"max_teams"`
-	NumberRounds         int     `json:"number_rounds"`
-	WinnerTeam           string  `json:"winner_team"`
-	InfoTournament       string  `json:"info_tournament"`
-	Description          string  `json:"description"`
-	Status               string  `json:"status"`
-	StartDate            string  `json:"start_date"`
-	RegistrationDeadline string  `json:"registration_deadline"`
-	EntryFee             float64 `json:"entry_fee"`
-	PrizePool            float64 `json:"prize_pool"`
-	BannerURL            string  `json:"banner_url"`
-}
-
-// GetTournaments — список турниров из PostgreSQL
-func (h *ClientHandler) GetTournaments(w http.ResponseWriter, r *http.Request) {
-	tournaments, err := h.tournamentRepo.ListForClient(r.Context())
-	if err != nil {
-		log.Printf("GetTournaments: %v", err)
-		http.Error(w, "Failed to fetch tournaments: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	result := make([]clientTournamentView, 0, len(tournaments))
-	for _, t := range tournaments {
-		rounds := 1
-		if t.MaxTeams > 1 {
-			rounds = int(math.Ceil(math.Log2(float64(t.MaxTeams))))
-		}
-		banner := ""
-		if t.BannerURL != nil {
-			banner = *t.BannerURL
-		}
-		result = append(result, clientTournamentView{
-			ID:                   t.ID,
-			Title:                t.Title,
-			Game:                 t.Game,
-			MaxTeams:             t.MaxTeams,
-			NumberRounds:         rounds,
-			WinnerTeam:           "",
-			InfoTournament:       t.Description,
-			Description:          t.Description,
-			Status:               string(t.Status),
-			StartDate:            t.StartDate.Format(time.RFC3339),
-			RegistrationDeadline: t.RegistrationDeadline.Format(time.RFC3339),
-			EntryFee:             t.EntryFee,
-			PrizePool:            t.PrizePool,
-			BannerURL:            banner,
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
 }
 // GetUserTheme - получение темы пользователя
 func (h *ClientHandler) GetUserTheme(w http.ResponseWriter, r *http.Request) {
@@ -157,60 +101,6 @@ func (h *ClientHandler) UpdateUserTheme(w http.ResponseWriter, r *http.Request) 
 
     json.NewEncoder(w).Encode(map[string]string{"message": "Theme updated", "theme": req.Theme})
 }
-// RegisterForTournament - регистрация на турнир
-func (h *ClientHandler) RegisterForTournament(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    var req struct {
-        TournamentID int `json:"tournament_id"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
-
-    // Проверяем существование турнира в MongoDB
-    var tournament bson.M
-    err := h.mongoDB.Collection("tournaments").FindOne(r.Context(), bson.M{"id": req.TournamentID}).Decode(&tournament)
-    if err != nil {
-        http.Error(w, "Tournament not found", http.StatusNotFound)
-        return
-    }
-
-    // Проверяем, не зарегистрирован ли уже пользователь
-    count, err := h.mongoDB.Collection("round_tournaments").CountDocuments(r.Context(), bson.M{
-        "tournament_id": req.TournamentID,
-        "user_id":       userID,
-    })
-    if err == nil && count > 0 {
-        http.Error(w, "Already registered", http.StatusConflict)
-        return
-    }
-
-    // Создаём запись в round_tournaments (первый раунд)
-    roundDoc := bson.M{
-        "tournament_id": req.TournamentID,
-        "user_id":       userID,
-        "round":         1,
-        "score":         "",
-        "users_score":   "",
-        "MVP":           false,
-    }
-
-    _, err = h.mongoDB.Collection("round_tournaments").InsertOne(r.Context(), roundDoc)
-    if err != nil {
-        http.Error(w, "Failed to register", http.StatusInternalServerError)
-        return
-    }
-
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Registered successfully"})
-}
-
 func (h *ClientHandler) emptyProfileResponse(userID int) map[string]interface{} {
 	return map[string]interface{}{
 		"id":         userID,

@@ -21,15 +21,10 @@ import AddIcon from '@mui/icons-material/Add';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import NavBar from '../components/NavBar';
 import { clientApi, GameCard } from '../api/clientApi';
+import { mediaUrl } from '../utils/media';
 
 const API = 'http://localhost:8080/api';
 const emptyCard = (): GameCard => ({ id: '', game: '', rank: '', comment: '' });
-
-const avatarSrc = (url: string) => {
-  if (!url) return undefined;
-  if (url.startsWith('http')) return url;
-  return `http://localhost:8080${url}`;
-};
 
 const Profile: React.FC = () => {
   const { updateUser } = useAuth();
@@ -57,46 +52,49 @@ const Profile: React.FC = () => {
       let loadedEmail = '';
 
       try {
-        const meRes = await fetch(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (meRes.ok) {
-          const me = await meRes.json();
-          loadedEmail = me.email ?? '';
-          setEmail(loadedEmail);
-          setUsername(me.username ?? '');
-          loadedAny = true;
-        } else {
-          setError('Не удалось загрузить данные аккаунта');
-        }
-      } catch {
-        setError('Не удалось загрузить данные аккаунта');
-      }
-
-      try {
         const profile = await clientApi.getProfile();
-        const gc = profile.game_cards;
-        setCards(Array.isArray(gc) && gc.length ? gc : [emptyCard()]);
         if (profile.avatar_url) {
           setAvatarUrl(profile.avatar_url);
           updateUser({ avatar_url: profile.avatar_url });
         }
-        if (profile.email && !loadedEmail) setEmail(profile.email);
-        loadedAny = true;
-        if (profile.mongo_ready === false) {
-          setMongoWarning(
-            'Сохранение игр и фото недоступно: запустите MongoDB и перезапустите сервер'
-          );
+        const gc = profile.game_cards;
+        setCards(Array.isArray(gc) && gc.length ? gc : [emptyCard()]);
+        if (profile.email) {
+          loadedEmail = profile.email;
+          setEmail(profile.email);
         }
+        if (profile.mongo_ready === false) {
+          setMongoWarning('Сохранение игр и фото недоступно: запустите MongoDB и перезапустите сервер');
+        }
+        loadedAny = true;
       } catch (e) {
         const msg = e instanceof Error ? e.message : '';
         if (msg.includes('MongoDB unavailable') || msg.includes('503')) {
           setMongoWarning('MongoDB не запущена — игры и фото не сохранятся');
         } else if (!loadedAny) {
-          setError('Не удалось загрузить профиль. Проверьте, что backend запущен');
-        } else {
           setMongoWarning('Не удалось загрузить игры и фото из MongoDB');
         }
+      }
+
+      try {
+        const meRes = await fetch(`${API}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          loadedEmail = me.email ?? loadedEmail;
+          setEmail(loadedEmail);
+          setUsername(me.username ?? '');
+          if (me.avatar_url) {
+            setAvatarUrl(me.avatar_url);
+            updateUser({ avatar_url: me.avatar_url });
+          }
+          loadedAny = true;
+        } else if (!loadedAny) {
+          setError('Не удалось загрузить данные аккаунта');
+        }
+      } catch {
+        if (!loadedAny) setError('Не удалось загрузить данные аккаунта');
       }
 
       try {
@@ -221,7 +219,7 @@ const Profile: React.FC = () => {
 
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 4 }}>
               <Avatar
-                src={avatarSrc(avatarUrl)}
+                src={mediaUrl(avatarUrl)}
                 sx={{ width: 120, height: 120, mb: 2, fontSize: '2.5rem' }}
               >
                 {username?.[0]?.toUpperCase() || '?'}

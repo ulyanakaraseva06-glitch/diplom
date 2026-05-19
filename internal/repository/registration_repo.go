@@ -3,6 +3,8 @@ package repository
 import (
     "context"
     "fmt"
+    "time"
+
     "esports-manager/internal/db"
     "esports-manager/internal/models"
 
@@ -238,4 +240,96 @@ func (r *RegistrationRepository) GetApprovedByTournament(ctx context.Context, to
     }
 
     return registrations, nil
+}
+
+// ListByUser — заявки пользователя
+func (r *RegistrationRepository) ListByUser(ctx context.Context, userID int) ([]*models.TournamentRegistration, error) {
+    query := `
+        SELECT id, tournament_id, user_id, team_name, status, payment_status, registered_at, approved_by, approved_at
+        FROM tournament_registrations
+        WHERE user_id = $1
+        ORDER BY registered_at DESC
+    `
+    rows, err := r.db.Pool.Query(ctx, query, userID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list user registrations: %w", err)
+    }
+    defer rows.Close()
+    var registrations []*models.TournamentRegistration
+    for rows.Next() {
+        var reg models.TournamentRegistration
+        if err := rows.Scan(
+            &reg.ID, &reg.TournamentID, &reg.UserID,
+            &reg.TeamName, &reg.Status, &reg.PaymentStatus,
+            &reg.RegisteredAt, &reg.ApprovedBy, &reg.ApprovedAt,
+        ); err != nil {
+            return nil, err
+        }
+        registrations = append(registrations, &reg)
+    }
+    return registrations, nil
+}
+
+// DeletePending — отмена заявки пользователем (только pending)
+func (r *RegistrationRepository) DeletePending(ctx context.Context, id, userID int) error {
+    query := `
+        DELETE FROM tournament_registrations
+        WHERE id = $1 AND user_id = $2 AND status = $3
+    `
+    result, err := r.db.Pool.Exec(ctx, query, id, userID, models.RegistrationStatusPending)
+    if err != nil {
+        return fmt.Errorf("failed to cancel registration: %w", err)
+    }
+    if result.RowsAffected() == 0 {
+        return fmt.Errorf("registration not found or cannot be cancelled")
+    }
+    return nil
+}
+
+// RegistrationApplication — заявка с данными турнира и пользователя
+type RegistrationApplication struct {
+    ID                int
+    TournamentID      int
+    TournamentTitle   string
+    OrganizerID       int
+    OrganizerUsername string
+    UserID            int
+    Username          string
+    Email             string
+    TeamName          string
+    Status            models.RegistrationStatus
+    PaymentStatus     models.PaymentStatus
+    RegisteredAt      time.Time
+}
+
+// ListApplications — заявки для организатора (свои турниры) или менеджера (все)
+func (r *RegistrationRepository) ListApplications(ctx context.Context, organizerID int, allOrganizers bool, status models.RegistrationStatus) ([]RegistrationApplication, error) {
+    query := `
+        SELECT r.id, r.tournament_id, t.title, t.organizer_id, ou.username,
+               r.user_id, u.username, u.email, r.team_name, r.status, r.payment_status, r.registered_at
+        FROM tournament_registrations r
+        JOIN tournaments t ON t.id = r.tournament_id
+        JOIN users u ON u.id = r.user_id
+        JOIN users ou ON ou.id = t.organizer_id
+        WHERE ($1 = '' OR r.status = $1)
+          AND ($2 = TRUE OR t.organizer_id = $3)
+        ORDER BY r.registered_at DESC
+    `
+    rows, err := r.db.Pool.Query(ctx, query, status, allOrganizers, organizerID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list applications: %w", err)
+    }
+    defer rows.Close()
+    var out []RegistrationApplication
+    for rows.Next() {
+        var a RegistrationApplication
+        if err := rows.Scan(
+            &a.ID, &a.TournamentID, &a.TournamentTitle, &a.OrganizerID, &a.OrganizerUsername,
+            &a.UserID, &a.Username, &a.Email, &a.TeamName, &a.Status, &a.PaymentStatus, &a.RegisteredAt,
+        ); err != nil {
+            return nil, err
+        }
+        out = append(out, a)
+    }
+    return out, nil
 }

@@ -32,6 +32,25 @@ type FriendRequestMongo struct {
 	CreatedAt  time.Time `json:"created_at" bson:"created_at"`
 }
 
+type TeamMongo struct {
+	ID         string    `json:"id" bson:"id"`
+	ChatPeerID int       `json:"chat_peer_id" bson:"chat_peer_id"`
+	Name       string    `json:"name" bson:"name"`
+	AvatarURL  string    `json:"avatar_url" bson:"avatar_url"`
+	LeaderID   int       `json:"leader_id" bson:"leader_id"`
+	MemberIDs  []int     `json:"member_ids" bson:"member_ids"`
+	CreatedAt  time.Time `json:"created_at" bson:"created_at"`
+}
+
+type TeamMessageMongo struct {
+	ID        string    `json:"id" bson:"id"`
+	TeamID    string    `json:"team_id" bson:"team_id"`
+	UserID    int       `json:"user_id" bson:"user_id"`
+	Text      string    `json:"text" bson:"text"`
+	ImageURL  string    `json:"image_url" bson:"image_url"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
+}
+
 type DirectMessageMongo struct {
 	ID         string    `json:"id" bson:"id"`
 	FromUserID int       `json:"from_user_id" bson:"from_user_id"`

@@ -2,8 +2,10 @@ package repository
 
 import (
     "context"
-    "fmt"
     "database/sql"
+    "fmt"
+    "time"
+
     "esports-manager/internal/db"
     "esports-manager/internal/models"
 
@@ -51,7 +53,7 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *models.To
 // FindByID - поиск турнира по ID
 func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.Tournament, error) {
     query := `
-        SELECT id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, approved_by, approved_at, created_at, updated_at
+        SELECT id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, approved_by, approved_at, is_vip, banner_url, created_at, updated_at
         FROM tournaments
         WHERE id = $1
     `
@@ -63,6 +65,7 @@ func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.To
         &tournament.EntryFee, &tournament.PrizePool, &tournament.MaxTeams,
         &tournament.Status, &tournament.OrganizerID,
         &tournament.ApprovedBy, &tournament.ApprovedAt,
+        &tournament.IsVIP, &tournament.BannerURL,
         &tournament.CreatedAt, &tournament.UpdatedAt,
     )
     if err != nil {
@@ -75,17 +78,45 @@ func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.To
     return &tournament, nil
 }
 
+// ClientTournamentFilter — фильтры витрины турниров
+type ClientTournamentFilter struct {
+	OrganizerID int
+	DateFrom    *time.Time
+	DateTo      *time.Time
+	IsVIP       *bool
+}
+
 // ListForClient — турниры для клиентской витрины (из PostgreSQL)
-func (r *TournamentRepository) ListForClient(ctx context.Context) ([]*models.Tournament, error) {
+func (r *TournamentRepository) ListForClient(ctx context.Context, f ClientTournamentFilter) ([]*models.Tournament, error) {
 	query := `
         SELECT id, title, game, COALESCE(description, ''), start_date, registration_deadline,
-               entry_fee, prize_pool, max_teams, status, organizer_id, COALESCE(banner_url, ''), created_at, updated_at
+               entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, COALESCE(banner_url, ''), created_at, updated_at
         FROM tournaments
         WHERE status IN ('approved', 'ongoing', 'pending')
+          AND ($1 = 0 OR organizer_id = $1)
+          AND ($2::timestamptz IS NULL OR start_date >= $2)
+          AND ($3::timestamptz IS NULL OR start_date <= $3)
+          AND ($4::boolean IS NULL OR is_vip = $4)
         ORDER BY start_date ASC
     `
 
-	rows, err := r.db.Pool.Query(ctx, query)
+	var orgID int
+	if f.OrganizerID > 0 {
+		orgID = f.OrganizerID
+	}
+	var dateFrom, dateTo interface{}
+	if f.DateFrom != nil {
+		dateFrom = *f.DateFrom
+	}
+	if f.DateTo != nil {
+		dateTo = *f.DateTo
+	}
+	var isVIP interface{}
+	if f.IsVIP != nil {
+		isVIP = *f.IsVIP
+	}
+
+	rows, err := r.db.Pool.Query(ctx, query, orgID, dateFrom, dateTo, isVIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list client tournaments: %w", err)
 	}
@@ -99,7 +130,7 @@ func (r *TournamentRepository) ListForClient(ctx context.Context) ([]*models.Tou
 			&t.ID, &t.Title, &t.Game, &t.Description,
 			&t.StartDate, &t.RegistrationDeadline,
 			&t.EntryFee, &t.PrizePool, &t.MaxTeams,
-			&t.Status, &t.OrganizerID, &bannerURL,
+			&t.Status, &t.OrganizerID, &t.IsVIP, &bannerURL,
 			&t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan tournament: %w", err)
@@ -110,6 +141,40 @@ func (r *TournamentRepository) ListForClient(ctx context.Context) ([]*models.Tou
 		tournaments = append(tournaments, &t)
 	}
 	return tournaments, nil
+}
+
+// ListClientOrganizers — организаторы с активными турнирами (для фильтра)
+func (r *TournamentRepository) ListClientOrganizers(ctx context.Context) ([]struct {
+	ID       int
+	Username string
+}, error) {
+	query := `
+        SELECT DISTINCT u.id, u.username
+        FROM tournaments t
+        JOIN users u ON u.id = t.organizer_id
+        WHERE t.status IN ('approved', 'ongoing', 'pending')
+        ORDER BY u.username
+    `
+	rows, err := r.db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organizers: %w", err)
+	}
+	defer rows.Close()
+	var out []struct {
+		ID       int
+		Username string
+	}
+	for rows.Next() {
+		var row struct {
+			ID       int
+			Username string
+		}
+		if err := rows.Scan(&row.ID, &row.Username); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, nil
 }
 
 // List - список турниров с фильтрацией и пагинацией

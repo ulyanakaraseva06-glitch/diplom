@@ -12,6 +12,9 @@ import Bans from './pages/Bans';
 import Support from './pages/Support';
 import TournamentDetails from './pages/TournamentDetails';
 import ClientTournaments from './pages/ClientTournaments';
+import AllTournaments from './pages/AllTournaments';
+import MyTournaments from './pages/MyTournaments';
+import TournamentApplications from './pages/TournamentApplications';
 import Profile from './pages/Profile';
 import Messenger from './pages/Messenger';
 import Subscription from './pages/Subscription';
@@ -40,6 +43,18 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+// Организатор или менеджер
+const StaffRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) return <div>Загрузка...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (user?.role !== 'organizer' && user?.role !== 'manager') {
+    return <Navigate to="/client/tournaments" />;
+  }
+  return <>{children}</>;
+};
+
 // Защищённый маршрут для всех авторизованных
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -63,7 +78,20 @@ function AppRoutes() {
       
       <Route path="/" element={<Navigate to="/client/tournaments" />} />
       <Route path="/client/tournaments" element={<ClientTournaments />} />
-      
+      <Route path="/client/all-tournaments" element={<AllTournaments />} />
+
+      <Route path="/my-tournaments" element={
+        <StaffRoute>
+          <MyTournaments />
+        </StaffRoute>
+      } />
+
+      <Route path="/tournament-applications" element={
+        <StaffRoute>
+          <TournamentApplications />
+        </StaffRoute>
+      } />
+
       <Route path="/profile" element={
         <ProtectedRoute>
           <Profile />

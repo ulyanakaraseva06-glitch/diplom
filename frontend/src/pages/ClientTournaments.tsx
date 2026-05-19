@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -24,6 +24,8 @@ import {
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import NavBar from '../components/NavBar';
+import RegisterTournamentDialog from '../components/RegisterTournamentDialog';
+import DiamondIcon from '@mui/icons-material/Diamond';
 
 const API = 'http://localhost:8080';
 const NEWS_PLACEHOLDER =
@@ -51,6 +53,7 @@ interface Tournament {
   entry_fee: number;
   prize_pool: number;
   banner_url: string;
+  is_vip?: boolean;
 }
 
 const formatMoney = (n: number) =>
@@ -86,95 +89,104 @@ const statusLabel: Record<string, string> = {
 const ClientTournaments: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOrganizer = user?.role === 'organizer';
+  const isManager = user?.role === 'manager';
+  const isClientUser = user?.role === 'user';
+  const showNews = !user || isClientUser;
+  const staffHome = isOrganizer || isManager;
+  const tournamentsRef = useRef<HTMLDivElement>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tournamentsLoading, setTournamentsLoading] = useState(true);
+  const [newsLoading, setNewsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [registering, setRegistering] = useState<number | null>(null);
   const [selected, setSelected] = useState<Tournament | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       try {
-        const [tRes, nRes] = await Promise.all([
-          fetch(`${API}/api/client/tournaments`),
-          fetch(`${API}/api/client/news`),
-        ]);
+        const tRes = await fetch(`${API}/api/client/tournaments`);
         if (!tRes.ok) {
           const detail = await tRes.text();
           throw new Error(detail || `HTTP ${tRes.status}`);
         }
         const tData = await tRes.json();
-        setTournaments(Array.isArray(tData) ? tData : []);
-
-        if (nRes.ok) {
-          const nData = await nRes.json();
-          setNews(Array.isArray(nData) ? nData.slice(0, 3) : []);
+        if (!cancelled) {
+          setTournaments(Array.isArray(tData) ? tData : []);
+          setTournamentsLoading(false);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : '';
-        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-          setError('Сервер недоступен. Запустите backend: go run ./cmd/server');
-        } else {
-          setError('Ошибка загрузки' + (msg ? `: ${msg}` : ''));
+        if (!cancelled) {
+          if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+            setError('Сервер недоступен. Запустите backend: go run ./cmd/server');
+          } else {
+            setError('Ошибка загрузки турниров' + (msg ? `: ${msg}` : ''));
+          }
+          setTournamentsLoading(false);
         }
-      } finally {
-        setLoading(false);
       }
     })();
-  }, []);
 
-  const handleRegister = async (tournamentId: number) => {
+    if (showNews) {
+      (async () => {
+        setNewsLoading(true);
+        try {
+          const nRes = await fetch(`${API}/api/client/news`);
+          if (nRes.ok) {
+            const nData = await nRes.json();
+            if (!cancelled) {
+              setNews(Array.isArray(nData) ? nData.slice(0, 3) : []);
+            }
+          }
+        } catch {
+          /* новости не блокируют страницу */
+        } finally {
+          if (!cancelled) setNewsLoading(false);
+        }
+      })();
+    } else if (!cancelled) {
+      setNewsLoading(false);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showNews]);
+
+  useEffect(() => {
+    const state = location.state as { scrollToTournaments?: boolean } | null;
+    const shouldScroll =
+      state?.scrollToTournaments || window.location.hash === '#tournaments';
+    if (!shouldScroll) return;
+
+    const timer = window.setTimeout(() => {
+      tournamentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [tournamentsLoading, location]);
+
+  const openRegister = () => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
-    setRegistering(tournamentId);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API}/api/client/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tournament_id: tournamentId }),
-      });
-
-      if (response.ok) {
-        alert('Вы успешно зарегистрированы на турнир!');
-        setSelected(null);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        alert(errorData.message || 'Ошибка регистрации');
-      }
-    } catch {
-      alert('Ошибка регистрации');
-    } finally {
-      setRegistering(null);
-    }
+    setRegisterOpen(true);
   };
 
-  const canRegister = user?.role === 'user';
-
-  if (loading) {
-    return (
-      <>
-        <NavBar />
-        <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
-          <CircularProgress />
-        </Box>
-      </>
-    );
-  }
+  const canRegister = isClientUser;
+  const displayTournaments = staffHome ? tournaments : tournaments.slice(0, 5);
 
   return (
     <>
       <NavBar />
 
       <Container maxWidth="lg" sx={{ pb: 6 }}>
-        {/* Новости */}
+        {showNews && (
         <Box sx={{ mt: 3, mb: 4 }}>
           <Typography
             variant="overline"
@@ -196,8 +208,15 @@ const ClientTournaments: React.FC = () => {
             Главные новости
           </Typography>
 
+          {newsLoading && (
+            <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 2 }}>
+              Загружаем интересные статьи
+            </Alert>
+          )}
+
           <Grid container spacing={2}>
-            {(news.length ? news : []).map((item, i) => (
+            {!newsLoading &&
+              news.map((item, i) => (
               <Grid key={item.url + i} size={{ xs: 12, md: 4 }}>
                 <Card
                   sx={{
@@ -268,15 +287,18 @@ const ClientTournaments: React.FC = () => {
                 </Card>
               </Grid>
             ))}
-            {news.length === 0 && (
+            {!newsLoading && news.length === 0 && (
               <Grid size={{ xs: 12 }}>
                 <Typography color="text.secondary">Новости временно недоступны</Typography>
               </Grid>
             )}
           </Grid>
         </Box>
+        )}
 
-        <Divider sx={{ mb: 4, borderColor: 'rgba(0, 212, 255, 0.2)' }} />
+        {showNews && (
+          <Divider sx={{ mb: 4, borderColor: 'rgba(0, 212, 255, 0.2)' }} />
+        )}
 
         {error && (
           <Alert severity="error" sx={{ mb: 2, bgcolor: 'rgba(255, 0, 68, 0.1)', border: '1px solid #ff0044' }}>
@@ -284,27 +306,36 @@ const ClientTournaments: React.FC = () => {
           </Alert>
         )}
 
-        {/* Турниры: 1/3 слева пусто, 2/3 справа */}
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 0, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
-          <Grid size={{ xs: 12, md: 8 }}>
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: 800,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                mb: 3,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-              }}
-            >
-              <EmojiEventsIcon color="primary" />
-              Турниры
-            </Typography>
+        <Grid container spacing={3} ref={tournamentsRef} id="tournaments-section" sx={{ mt: staffHome ? 3 : 0 }}>
+          {!staffHome && <Grid size={{ xs: 0, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />}
+          <Grid size={{ xs: 12, md: staffHome ? 12 : 8 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <EmojiEventsIcon color="primary" />
+                Турниры
+              </Typography>
+              {isClientUser && (
+                <Button variant="outlined" onClick={() => navigate('/client/all-tournaments')}>
+                  Открыть все
+                </Button>
+              )}
+            </Box>
 
-            {tournaments.length === 0 ? (
+            {tournamentsLoading ? (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            ) : tournaments.length === 0 ? (
               <Paper sx={{ p: 4, textAlign: 'center' }}>
                 <Typography variant="h6" color="text.secondary">
                   Нет доступных турниров
@@ -315,7 +346,7 @@ const ClientTournaments: React.FC = () => {
               </Paper>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {tournaments.map((tournament) => (
+                {displayTournaments.map((tournament) => (
                   <Card
                     key={tournament.id}
                     sx={{
@@ -350,7 +381,14 @@ const ClientTournaments: React.FC = () => {
                       <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                         {tournament.title}
                       </Typography>
-                      <Chip label={tournament.game} size="small" sx={{ alignSelf: 'flex-start', mb: 1 }} />
+                      <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                        {tournament.is_vip ? (
+                          <Chip icon={<DiamondIcon />} label="VIP" color="secondary" size="small" />
+                        ) : (
+                          <Chip label="Обычный" size="small" variant="outlined" />
+                        )}
+                        <Chip label={tournament.game} size="small" />
+                      </Box>
                       <Typography variant="body1" sx={{ color: 'primary.light', fontWeight: 600, mb: 1 }}>
                         Призовой фонд: {formatMoney(tournament.prize_pool)}
                       </Typography>
@@ -428,13 +466,12 @@ const ClientTournaments: React.FC = () => {
                   variant="contained"
                   size="large"
                   fullWidth
-                  disabled={registering === selected.id}
-                  onClick={() => handleRegister(selected.id)}
+                  onClick={openRegister}
                   sx={{
                     background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
                   }}
                 >
-                  {registering === selected.id ? 'Регистрация...' : 'Зарегистрироваться'}
+                  Зарегистрироваться
                 </Button>
               ) : user?.role === 'organizer' ? (
                 <Chip label="Доступно организаторам" color="primary" sx={{ alignSelf: 'center' }} />
@@ -450,6 +487,17 @@ const ClientTournaments: React.FC = () => {
           </>
         )}
       </Dialog>
+
+      <RegisterTournamentDialog
+        open={registerOpen}
+        tournamentId={selected?.id ?? null}
+        isVip={!!selected?.is_vip}
+        onClose={() => setRegisterOpen(false)}
+        onSuccess={() => {
+          setSelected(null);
+          alert('Заявка отправлена! Ожидайте подтверждения организатора.');
+        }}
+      />
     </>
   );
 };

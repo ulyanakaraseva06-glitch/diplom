@@ -165,14 +165,14 @@ const Dashboard: React.FC = () => {
               </Card>
             </Grid>
 
-            {(isManager || isOrganizer) && (
+            {isManager && (
               <Grid size={{ xs: 12, md: 4 }}>
                 <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <AssignmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
                     <Typography variant="h6">Заявки</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Модерация заявок на участие в турнирах
+                      Модерация заявок на участие
                     </Typography>
                     <Button variant="contained" color="warning" onClick={() => navigate('/registrations')}>
                       Перейти

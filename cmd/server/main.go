@@ -69,7 +69,7 @@ func main() {
     banHandler := handlers.NewBanHandler(banRepo, userRepo)
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo)
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo)
     uploadHandler := handlers.NewUploadHandler()
 
     // Создание роутера
@@ -93,6 +93,7 @@ func main() {
     r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
     // Клиентские маршруты (публичные)
     r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
+    r.HandleFunc("/api/client/tournaments/organizers", clientHandler.GetTournamentOrganizers).Methods("GET", "OPTIONS")
     r.HandleFunc("/api/client/news", handlers.GetCybersportNews).Methods("GET", "OPTIONS")
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
@@ -105,13 +106,21 @@ func main() {
     api.HandleFunc("/client/friends/add", clientHandler.AddFriend).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/friends/request", clientHandler.SendFriendRequest).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/friends/respond", clientHandler.RespondFriendRequest).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/{id:[0-9]+}", clientHandler.RemoveFriend).Methods("DELETE", "OPTIONS")
     api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
+
+    // Команды
+    api.HandleFunc("/client/teams", clientHandler.ListTeams).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/teams", clientHandler.CreateTeam).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/teams/{team_id}", clientHandler.UpdateTeam).Methods("PUT", "OPTIONS")
 
     // Мессенджер
     api.HandleFunc("/client/chats", clientHandler.ListChats).Methods("GET", "OPTIONS")
-    api.HandleFunc("/client/chats/{peer_id:[0-9]+}/messages", clientHandler.GetChatMessages).Methods("GET", "OPTIONS")
-    api.HandleFunc("/client/chats/{peer_id:[0-9]+}/messages", clientHandler.SendChatMessage).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}/messages", clientHandler.GetChatMessages).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}/messages", clientHandler.SendChatMessage).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}", clientHandler.DeleteChat).Methods("DELETE", "OPTIONS")
 
     // Кошелёк
     api.HandleFunc("/client/wallet", clientHandler.GetWallet).Methods("GET", "OPTIONS")
@@ -123,6 +132,9 @@ func main() {
 
     // Маршруты для клиентского модуля (требуют авторизации)
     api.HandleFunc("/client/register", clientHandler.RegisterForTournament).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/registrations/my", clientHandler.GetMyRegistrations).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/registrations/{id:[0-9]+}", clientHandler.CancelRegistration).Methods("DELETE", "OPTIONS")
+    api.HandleFunc("/client/registrations/applications", clientHandler.ListRegistrationApplications).Methods("GET", "OPTIONS")
 
     // Клиентские маршруты для профиля
     api.HandleFunc("/client/profile", clientHandler.GetProfile).Methods("GET", "OPTIONS")

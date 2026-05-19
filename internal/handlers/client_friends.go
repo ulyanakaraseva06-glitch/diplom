@@ -28,9 +28,8 @@ func (h *ClientHandler) enrichUsers(ctx context.Context, ids []int) []friendUser
 			continue
 		}
 		avatar := ""
-		var mu models.UserMongo
-		if err := h.mongoDB.Collection("users").FindOne(ctx, bson.M{"id": id}).Decode(&mu); err == nil {
-			avatar = mu.AvatarURL
+		if h.mongoDB != nil {
+			avatar = h.mongoAvatarURL(ctx, id)
 		}
 		result = append(result, friendUserView{
 			ID: id, Username: u.Username, Email: u.Email, AvatarURL: avatar,
@@ -65,9 +64,9 @@ func (h *ClientHandler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 	var out []playerView
 	for _, u := range users {
 		avatar := ""
-		var mu models.UserMongo
-		_ = h.mongoDB.Collection("users").FindOne(r.Context(), bson.M{"id": u.ID}).Decode(&mu)
-		avatar = mu.AvatarURL
+		if h.mongoDB != nil {
+			avatar = h.mongoAvatarURL(r.Context(), u.ID)
+		}
 
 		status := "none"
 		if friendIDs[u.ID] {

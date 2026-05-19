@@ -50,6 +50,78 @@ export interface ChatPreview {
   username: string;
   avatar_url: string;
   is_support: boolean;
+  is_team?: boolean;
+  team_id?: string;
+}
+
+export interface PublicProfile {
+  id: number;
+  username: string;
+  avatar_url: string;
+  game_cards: GameCard[];
+}
+
+export interface TeamMember {
+  id: number;
+  username: string;
+  avatar_url: string;
+  is_leader: boolean;
+}
+
+export interface Team {
+  id: string;
+  chat_peer_id: number;
+  name: string;
+  avatar_url: string;
+  leader_id: number;
+  members: TeamMember[];
+  is_leader: boolean;
+}
+
+export interface ClientTournament {
+  id: number;
+  title: string;
+  game: string;
+  max_teams: number;
+  description: string;
+  status: string;
+  start_date: string;
+  registration_deadline: string;
+  entry_fee: number;
+  prize_pool: number;
+  banner_url: string;
+  is_vip: boolean;
+  organizer_id: number;
+  organizer_username: string;
+}
+
+export interface TournamentOrganizer {
+  id: number;
+  username: string;
+}
+
+export interface MyRegistration {
+  id: number;
+  tournament_id: number;
+  tournament_title: string;
+  team_name: string;
+  status: string;
+  registered_at: string;
+}
+
+export interface TournamentApplication {
+  id: number;
+  tournament_id: number;
+  tournament_title: string;
+  organizer_id: number;
+  organizer_username: string;
+  user_id: number;
+  username: string;
+  email: string;
+  team_name: string;
+  status: string;
+  payment_status: string;
+  registered_at: string;
 }
 
 export interface ChatMessage {
@@ -59,6 +131,7 @@ export interface ChatMessage {
   from_me: boolean;
   is_support?: boolean;
   created_at: string;
+  username?: string;
 }
 
 export interface UserSubscription {
@@ -153,6 +226,12 @@ export const clientApi = {
       body: JSON.stringify({ request_id, accept }),
     }).then(handleJson<any>),
 
+  removeFriend: (friendId: number) =>
+    fetch(`${API}/client/friends/${friendId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    }).then(handleJson<{ message: string }>),
+
   getNotifications: () =>
     fetch(`${API}/client/notifications`, { headers: authHeaders() }).then(handleJsonArray<any>),
 
@@ -172,4 +251,67 @@ export const clientApi = {
       headers: authHeaders(),
       body: JSON.stringify({ text, image_url }),
     }).then(handleJson<ChatMessage>),
+
+  deleteChat: (peerId: number) =>
+    fetch(`${API}/client/chats/${peerId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    }).then(handleJson<{ message: string }>),
+
+  getPublicProfile: (userId: number) =>
+    fetch(`${API}/client/users/${userId}/profile`, { headers: authHeaders() }).then(
+      handleJson<PublicProfile>
+    ),
+
+  getTeams: () =>
+    fetch(`${API}/client/teams`, { headers: authHeaders() }).then(handleJsonArray<Team>),
+
+  createTeam: (data: { name: string; avatar_url: string; member_ids: number[] }) =>
+    fetch(`${API}/client/teams`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    }).then(handleJson<Team>),
+
+  updateTeam: (teamId: string, data: { name?: string; avatar_url?: string; member_ids: number[] }) =>
+    fetch(`${API}/client/teams/${teamId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    }).then(handleJson<Team>),
+
+  getClientTournaments: (params: Record<string, string> = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return fetch(`${API}/client/tournaments${q ? `?${q}` : ''}`).then(
+      handleJsonArray<ClientTournament>
+    );
+  },
+
+  getTournamentOrganizers: () =>
+    fetch(`${API}/client/tournaments/organizers`).then(handleJsonArray<TournamentOrganizer>),
+
+  registerTournament: (body: { tournament_id: number; team_id?: string; team_name?: string }) =>
+    fetch(`${API}/client/register`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(body),
+    }).then(handleJson<any>),
+
+  getMyRegistrations: () =>
+    fetch(`${API}/client/registrations/my`, { headers: authHeaders() }).then(
+      handleJsonArray<MyRegistration>
+    ),
+
+  cancelRegistration: (id: number) =>
+    fetch(`${API}/client/registrations/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    }).then(handleJson<{ message: string }>),
+
+  getRegistrationApplications: (status = '') => {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    return fetch(`${API}/client/registrations/applications${q}`, {
+      headers: authHeaders(),
+    }).then(handleJsonArray<TournamentApplication>);
+  },
 };
