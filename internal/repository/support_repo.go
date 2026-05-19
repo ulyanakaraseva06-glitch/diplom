@@ -5,8 +5,6 @@ import (
     "fmt"
     "esports-manager/internal/db"
     "esports-manager/internal/models"
-
-  
 )
 
 type SupportRepository struct {
@@ -20,12 +18,12 @@ func NewSupportRepository(db *db.PostgresDB) *SupportRepository {
 // Create - создание сообщения
 func (r *SupportRepository) Create(ctx context.Context, msg *models.SupportMessage) error {
     query := `
-        INSERT INTO support_messages (user_id, manager_id, message, is_from_user, is_read)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO support_messages (user_id, manager_id, message, image_url, is_from_user, is_read)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id, created_at
     `
 
-    err := r.db.Pool.QueryRow(ctx, query, msg.UserID, msg.ManagerID, msg.Message, msg.IsFromUser, msg.IsRead).Scan(
+    err := r.db.Pool.QueryRow(ctx, query, msg.UserID, msg.ManagerID, msg.Message, msg.ImageURL, msg.IsFromUser, msg.IsRead).Scan(
         &msg.ID, &msg.CreatedAt,
     )
     if err != nil {
@@ -38,7 +36,7 @@ func (r *SupportRepository) Create(ctx context.Context, msg *models.SupportMessa
 // GetMessages - получение истории сообщений для пользователя
 func (r *SupportRepository) GetMessages(ctx context.Context, userID int, limit, offset int) ([]*models.SupportMessage, error) {
     query := `
-        SELECT id, user_id, manager_id, message, is_from_user, is_read, created_at
+        SELECT id, user_id, manager_id, message, image_url, is_from_user, is_read, created_at
         FROM support_messages
         WHERE user_id = $1
         ORDER BY created_at ASC
@@ -55,9 +53,9 @@ func (r *SupportRepository) GetMessages(ctx context.Context, userID int, limit, 
     for rows.Next() {
         var msg models.SupportMessage
         err := rows.Scan(
-            &msg.ID, &msg.UserID, &msg.ManagerID, &msg.Message,
-            &msg.IsFromUser, &msg.IsRead, &msg.CreatedAt,
-        )
+    &msg.ID, &msg.UserID, &msg.ManagerID, &msg.Message, &msg.ImageURL,
+    &msg.IsFromUser, &msg.IsRead, &msg.CreatedAt,
+)
         if err != nil {
             return nil, fmt.Errorf("failed to scan message: %w", err)
         }
@@ -98,4 +96,51 @@ func (r *SupportRepository) MarkAsRead(ctx context.Context, userID int) error {
     }
 
     return nil
+}
+
+// ActiveChatUser - пользователь с активным чатом и количеством непрочитанных
+type ActiveChatUser struct {
+    ID          int    `json:"id"`
+    Username    string `json:"username"`
+    Email       string `json:"email"`
+    UnreadCount int    `json:"unread_count"`
+}
+
+// GetUsersWithActiveChats - список пользователей, у которых есть сообщения в поддержку
+func (r *SupportRepository) GetUsersWithActiveChats(ctx context.Context) ([]ActiveChatUser, error) {
+    query := `
+        SELECT 
+            u.id, 
+            u.username, 
+            u.email,
+            COALESCE(
+                (SELECT COUNT(*) 
+                 FROM support_messages sm 
+                 WHERE sm.user_id = u.id 
+                   AND sm.is_from_user = true 
+                   AND sm.is_read = false), 0
+            ) as unread_count
+        FROM users u
+        WHERE EXISTS (
+            SELECT 1 FROM support_messages sm2 WHERE sm2.user_id = u.id
+        )
+        AND u.role = 'user'
+        ORDER BY unread_count DESC, u.username
+    `
+
+    rows, err := r.db.Pool.Query(ctx, query)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get users with active chats: %w", err)
+    }
+    defer rows.Close()
+
+    var result []ActiveChatUser
+    for rows.Next() {
+        var chat ActiveChatUser
+        if err := rows.Scan(&chat.ID, &chat.Username, &chat.Email, &chat.UnreadCount); err != nil {
+            return nil, fmt.Errorf("failed to scan active chat user: %w", err)
+        }
+        result = append(result, chat)
+    }
+    return result, nil
 }

@@ -115,18 +115,19 @@ export interface BanRequest {
 export interface SupportMessage {
   id: number;
   user_id: number;
-  username?: string;
   manager_id?: number;
   manager_name?: string;
   message: string;
-  image_url?: string;
+  image_url?: string;  // добавить
   is_from_user: boolean;
   is_read: boolean;
   created_at: string;
+  username?: string;
 }
 
 export interface SupportMessageCreate {
   message: string;
+  image_url?: string; 
 }
 
 export interface Participant {
@@ -150,4 +151,11 @@ export interface UserSubscription {
   end_date: string;
   is_active: boolean;
   auto_renew: boolean;
+}
+
+export interface ActiveChat {
+  id: number;
+  username: string;
+  email: string;
+  unread_count: number;
 }
