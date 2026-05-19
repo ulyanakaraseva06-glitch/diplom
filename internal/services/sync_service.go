@@ -2,6 +2,7 @@ package services
 
 import (
     "context"
+    "fmt"
     "log"
     "math"
 
@@ -29,6 +30,37 @@ func NewSyncService(
         mongoUsers:       mongoDB.Collection("users"),
         mongoTournaments: mongoDB.Collection("tournaments"),
     }
+}
+
+// SyncUser — синхронизация одного пользователя из PostgreSQL в MongoDB (после регистрации).
+func (s *SyncService) SyncUser(ctx context.Context, user *models.User) error {
+    if user == nil {
+        return nil
+    }
+
+    var existing models.UserMongo
+    err := s.mongoUsers.FindOne(ctx, bson.M{"id": user.ID}).Decode(&existing)
+    if err == nil {
+        return nil
+    }
+    if err != mongo.ErrNoDocuments {
+        return err
+    }
+
+    mongoUser := models.UserMongo{
+        ID:           user.ID,
+        Email:        user.Email,
+        PasswordHash: user.PasswordHash,
+        Game:         []string{},
+        Rank:         []string{},
+        Achievements: []string{},
+        Theme:        "cyber",
+    }
+    _, err = s.mongoUsers.InsertOne(ctx, mongoUser)
+    if err != nil {
+        return fmt.Errorf("insert user %d to MongoDB: %w", user.ID, err)
+    }
+    return nil
 }
 
 func (s *SyncService) SyncAll(ctx context.Context) error {

@@ -2,26 +2,30 @@ package handlers
 
 import (
     "encoding/json"
+    "log"
     "net/http"
     "time"
 
     "esports-manager/internal/middleware"
     "esports-manager/internal/models"
     "esports-manager/internal/repository"
+    "esports-manager/internal/services"
 
     "github.com/golang-jwt/jwt/v5"
     "golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-    userRepo *repository.UserRepository
-    jwtSecret []byte
+    userRepo    *repository.UserRepository
+    syncService *services.SyncService
+    jwtSecret   []byte
 }
 
-func NewAuthHandler(userRepo *repository.UserRepository, jwtSecret string) *AuthHandler {
+func NewAuthHandler(userRepo *repository.UserRepository, syncService *services.SyncService, jwtSecret string) *AuthHandler {
     return &AuthHandler{
-        userRepo:  userRepo,
-        jwtSecret: []byte(jwtSecret),
+        userRepo:    userRepo,
+        syncService: syncService,
+        jwtSecret:   []byte(jwtSecret),
     }
 }
 
@@ -73,11 +77,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Создание пользователя
+    // Создание пользователя в PostgreSQL
     user, err := h.userRepo.Create(r.Context(), req.Email, string(hashedPassword), req.Username, models.RoleUser)
     if err != nil {
-        http.Error(w, "Failed to create user", http.StatusInternalServerError)
+        log.Printf("Register: failed to create user in PostgreSQL: %v", err)
+        http.Error(w, "Failed to create user: "+err.Error(), http.StatusInternalServerError)
         return
+    }
+
+    // Копия профиля в MongoDB для клиентского модуля
+    if h.syncService != nil {
+        if err := h.syncService.SyncUser(r.Context(), user); err != nil {
+            log.Printf("Register: failed to sync user %d to MongoDB: %v", user.ID, err)
+        }
     }
 
     // Генерация JWT токена
@@ -149,7 +161,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) generateToken(userID int, role models.UserRole) (string, error) {
     claims := jwt.MapClaims{
         "user_id": userID,
-        "role":    role,
+        "role":    string(role),
         "exp":     time.Now().Add(time.Hour * 24).Unix(), // Токен живет 24 часа
     }
 
@@ -177,6 +189,10 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 
     user, err := h.userRepo.FindByID(r.Context(), userID)
     if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    if user == nil {
         http.Error(w, "User not found", http.StatusNotFound)
         return
     }

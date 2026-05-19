@@ -2,7 +2,9 @@ package repository
 
 import (
     "context"
+    "errors"
     "fmt"
+
     "esports-manager/internal/db"
     "esports-manager/internal/models"
 
@@ -50,7 +52,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
         &user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.Role, &user.CreatedAt, &user.UpdatedAt,
     )
     if err != nil {
-        if err == pgx.ErrNoRows {
+        if errors.Is(err, pgx.ErrNoRows) {
             return nil, nil
         }
         return nil, fmt.Errorf("failed to find user by email: %w", err)
@@ -72,7 +74,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id int) (*models.User, er
         &user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.Role, &user.CreatedAt, &user.UpdatedAt,
     )
     if err != nil {
-        if err == pgx.ErrNoRows {
+        if errors.Is(err, pgx.ErrNoRows) {
             return nil, nil
         }
         return nil, fmt.Errorf("failed to find user by id: %w", err)

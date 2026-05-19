@@ -18,8 +18,13 @@ type Config struct {
 }
 
 func Load() *Config {
-    err := godotenv.Load()
-    if err != nil {
+    loaded := false
+    for _, path := range []string{".env", "cmd/server/.env"} {
+        if err := godotenv.Load(path); err == nil {
+            loaded = true
+        }
+    }
+    if !loaded {
         log.Println("Warning: .env file not found, using environment variables")
     }
 
@@ -27,7 +32,7 @@ func Load() *Config {
         DBHost:     getEnv("DB_HOST", "localhost"),
         DBPort:     getEnv("DB_PORT", "5432"),
         DBUser:     getEnv("DB_USER", "postgres"),
-        DBPassword: getEnv("DB_PASSWORD", "postgres"),
+        DBPassword: getEnv("DB_PASSWORD", "1234"),
         DBName:     getEnv("DB_NAME", "esports_manager"),
         MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
         MongoDBName: getEnv("MONGO_DB_NAME", "kib_db"),

@@ -4,9 +4,7 @@ import (
     "context"
     "log"
     "net/http"
-    "path/filepath"
 
-    "esports-manager/internal/utils"
     "esports-manager/internal/config"
     "esports-manager/internal/db"
     "esports-manager/internal/handlers"
@@ -53,29 +51,24 @@ func main() {
     // Инициализация подписок
     subService := services.NewSubscriptionService(mongoClient.Database)
     if err := subService.InitSubscriptions(context.Background()); err != nil {
-        log.Printf("Warning: subscription init failed: %v", err)
+    log.Printf("Warning: subscription init failed: %v", err)
     }
 
+
     // Инициализация хендлеров
-    authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
+    authHandler := handlers.NewAuthHandler(userRepo, syncService, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
     banHandler := handlers.NewBanHandler(banRepo, userRepo)
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
     clientHandler := handlers.NewClientHandler(mongoClient.Database)
-    uploadHandler := handlers.NewUploadHandler()
 
     // Создание роутера
     r := mux.NewRouter()
 
-    // Добавляем CORS middleware для ВСЕХ маршрутов
+    // Добавляем CORS middleware для всех маршрутов
     r.Use(middleware.CORS)
-
-    // Статические файлы для загруженных баннеров (один раз)
-    projectRoot := utils.GetProjectRoot()
-    uploadsPath := filepath.Join(projectRoot, "uploads")
-    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
 
     // Публичные маршруты (не требуют авторизации)
     r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
@@ -87,22 +80,17 @@ func main() {
 
     // WebSocket (не требует авторизации)
     r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
-    
     // Клиентские маршруты (публичные)
     r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
-
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
-
-    // Загрузка баннера
-    api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
 
     // Маршруты для клиентского модуля (друзья)
     api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/friends/add", clientHandler.AddFriend).Methods("POST", "OPTIONS")
 
-    // Маршруты для клиентского модуля (регистрация на турнир)
+    // Маршруты для клиентского модуля (требуют авторизации)
     api.HandleFunc("/client/register", clientHandler.RegisterForTournament).Methods("POST", "OPTIONS")
 
     // Клиентские маршруты для профиля
@@ -141,18 +129,14 @@ func main() {
     api.HandleFunc("/support/{user_id:[0-9]+}/unread", supportHandler.GetUnreadCount).Methods("GET", "OPTIONS")
     api.HandleFunc("/support/{user_id:[0-9]+}/read", supportHandler.MarkAsRead).Methods("POST", "OPTIONS")
 
-    // Маршруты для темы
-    api.HandleFunc("/client/theme", clientHandler.GetUserTheme).Methods("GET", "OPTIONS")
-    api.HandleFunc("/client/theme", clientHandler.UpdateUserTheme).Methods("PUT", "OPTIONS")
-
-    // Маршруты для администратора (только менеджеры и организаторы)
+    // Маршруты только для менеджеров
     admin := api.PathPrefix("/admin").Subrouter()
-    admin.Use(middleware.RequireRole("manager", "organizer"))
+    admin.Use(middleware.RequireManager)
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.UpdateTournament).Methods("PUT", "OPTIONS")
     admin.HandleFunc("/tournaments/{id:[0-9]+}", tournamentHandler.DeleteTournament).Methods("DELETE", "OPTIONS")
-    admin.HandleFunc("/tournaments/{id:[0-9]+}/approve", tournamentHandler.ApproveTournament).Methods("POST", "OPTIONS")  // ← ДОБАВЛЕН ЭТОТ МАРШРУТ
+    admin.HandleFunc("/tournaments/{id:[0-9]+}/approve", tournamentHandler.ApproveTournament).Methods("POST", "OPTIONS")
 
-    // Блокировки (только для менеджеров)
+    // Блокировки
     admin.HandleFunc("/bans", banHandler.ListActiveBans).Methods("GET", "OPTIONS")
     admin.HandleFunc("/bans", banHandler.CreateBan).Methods("POST", "OPTIONS")
     admin.HandleFunc("/bans/{user_id:[0-9]+}", banHandler.RemoveBan).Methods("DELETE", "OPTIONS")

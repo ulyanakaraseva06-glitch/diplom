@@ -12,6 +12,7 @@ import (
 
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type ClientHandler struct {
@@ -221,12 +222,19 @@ func (h *ClientHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
             "rank":         req.Rank,
             "achievements": req.Achievements,
         },
+        "$setOnInsert": bson.M{
+            "id":    userID,
+            "theme": "cyber",
+            "game":  []string{},
+            "rank":  []string{},
+        },
     }
 
     _, err := h.mongoDB.Collection("users").UpdateOne(
         r.Context(),
         bson.M{"id": userID},
         update,
+        options.Update().SetUpsert(true),
     )
     if err != nil {
         log.Printf("UpdateProfile: database error: %v", err)
