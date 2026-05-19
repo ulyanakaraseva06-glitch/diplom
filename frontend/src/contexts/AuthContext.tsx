@@ -55,7 +55,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (data: LoginRequest) => {
     const response = await authApi.login(data);
     const { token, user } = response.data;
-    
+
+    if (!token || !user?.id) {
+      throw new Error('Сервер вернул некорректный ответ при входе');
+    }
+
     setToken(token);
     setUser(user);
     localStorage.setItem('token', token);

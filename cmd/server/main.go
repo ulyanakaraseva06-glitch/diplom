@@ -74,15 +74,13 @@ func main() {
 
     // Создание роутера
     r := mux.NewRouter()
-uploadsPath := filepath.Join(utils.GetProjectRoot(), "uploads")
-    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
-    // Статические файлы для загруженных изображений
-    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
-   
+
     // Добавляем CORS middleware для всех маршрутов
     r.Use(middleware.CORS)
 
-    
+    uploadsPath := filepath.Join(utils.GetProjectRoot(), "uploads")
+    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
+
     // Публичные маршруты (не требуют авторизации)
     r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
     r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
@@ -154,8 +152,7 @@ uploadsPath := filepath.Join(utils.GetProjectRoot(), "uploads")
     // Маршруты для административного модуля
     api.HandleFunc("/admin/users", userHandler.ListUsers).Methods("GET", "OPTIONS")
     api.HandleFunc("/admin/users/{id:[0-9]+}", userHandler.GetUserByID).Methods("GET", "OPTIONS")
-    api.HandleFunc("/support/chats", supportHandler.GetActiveChats).Methods("GET", "OPTIONS")
-    api.HandleFunc("/support/upload", supportHandler.UploadImage).Methods("POST", "OPTIONS")
+
     // Маршруты для турниров
     api.HandleFunc("/tournaments", tournamentHandler.ListTournaments).Methods("GET", "OPTIONS")
     api.HandleFunc("/tournaments", tournamentHandler.CreateTournament).Methods("POST", "OPTIONS")

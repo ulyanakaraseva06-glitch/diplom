@@ -39,12 +39,12 @@ func (r *UserRepository) Create(ctx context.Context, email, passwordHash, userna
     return &user, nil
 }
 
-// FindByEmail - поиск пользователя по email
+// FindByEmail - поиск пользователя по email (без учёта регистра и пробелов)
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
     query := `
         SELECT id, email, password_hash, username, role, created_at, updated_at
         FROM users
-        WHERE email = $1
+        WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
     `
 
     var user models.User
@@ -163,6 +163,23 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int, role models
 
     return nil
 }
+// UpdatePasswordHash - обновление хеша пароля
+func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID int, passwordHash string) error {
+    query := `
+        UPDATE users
+        SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+    `
+    result, err := r.db.Pool.Exec(ctx, query, passwordHash, userID)
+    if err != nil {
+        return fmt.Errorf("failed to update password: %w", err)
+    }
+    if result.RowsAffected() == 0 {
+        return fmt.Errorf("user with id %d not found", userID)
+    }
+    return nil
+}
+
 // UpdateUsername - обновление имени пользователя
 func (r *UserRepository) UpdateUsername(ctx context.Context, userID int, username string) error {
     query := `

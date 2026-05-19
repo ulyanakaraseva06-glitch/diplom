@@ -12,6 +12,7 @@ import {
   Divider,
 } from '@mui/material';
 import confetti from 'canvas-confetti';
+import { getApiErrorMessage } from '../utils/apiError';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -64,13 +65,16 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await login({ email, password });
+      const trimmed = { email: email.trim(), password };
+      await login(trimmed);
       triggerConfetti();
       setTimeout(() => {
-        navigate('/client/tournaments');
+        const role = JSON.parse(localStorage.getItem('user') || '{}')?.role;
+        if (role === 'manager') navigate('/dashboard');
+        else navigate('/client/tournaments');
       }, 800);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка входа');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Ошибка входа'));
     } finally {
       setLoading(false);
     }
