@@ -565,6 +565,25 @@ const resetWinner = (matchId: string) => {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h4" gutterBottom>{tournament.title}</Typography>
         <Chip label={tournament.status === 'pending' ? 'Ожидает' : 'Одобрен'} color={tournament.status === 'pending' ? 'warning' : 'success'} sx={{ mb: 2 }} />
+        
+        {tournament.banner_url && (
+    <Box
+      component="img"
+      src={`http://localhost:8080${tournament.banner_url}`}
+      alt={tournament.title}
+      sx={{
+        width: '100%',
+        maxHeight: 300,
+        objectFit: 'cover',
+        borderRadius: 2,
+        mb: 2,
+      }}
+      onError={(e) => {
+        const img = e.target as HTMLImageElement;
+        img.style.display = 'none';
+      }}
+    />
+  )}
         <Grid container spacing={3} sx={{ mt: 1 }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Box display="flex" alignItems="center" gap={1}><EmojiEventsIcon color="primary" /><Typography><strong>Игра:</strong> {tournament.game}</Typography></Box>

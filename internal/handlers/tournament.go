@@ -333,6 +333,7 @@ func (h *TournamentHandler) GetTournamentWithRegistrations(w http.ResponseWriter
         "title":                 tournament.Title,
         "game":                  tournament.Game,
         "description":           tournament.Description,
+        "banner_url":            tournament.BannerURL, 
         "start_date":            tournament.StartDate,
         "registration_deadline": tournament.RegistrationDeadline,
         "entry_fee":             tournament.EntryFee,

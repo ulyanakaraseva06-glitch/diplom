@@ -25,8 +25,7 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *models.To
     query := `
         INSERT INTO tournaments (title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url, created_at, updated_at
-    `
+      RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url, created_at, updated_at`
 
     var newTournament models.Tournament
     err := r.db.Pool.QueryRow(ctx, query,
@@ -230,53 +229,61 @@ func (r *TournamentRepository) Update(ctx context.Context, id int, update *model
     }
 
     // Применяем изменения
-    if update.Title != "" {
-        tournament.Title = update.Title
-    }
-    if update.Game != "" {
-        tournament.Game = update.Game
-    }
-    if update.Description != "" {
-        tournament.Description = update.Description
-    }
-    if !update.StartDate.IsZero() {
-        tournament.StartDate = update.StartDate
-    }
-    if !update.RegistrationDeadline.IsZero() {
-        tournament.RegistrationDeadline = update.RegistrationDeadline
-    }
-    if update.EntryFee != nil {
-        tournament.EntryFee = *update.EntryFee
-    }
-    if update.PrizePool != nil {
-        tournament.PrizePool = *update.PrizePool
-    }
-    if update.MaxTeams != nil {
-        tournament.MaxTeams = *update.MaxTeams
-    }
-    if update.Status != "" {
-        tournament.Status = update.Status
-    }
+if update.Title != "" {
+    tournament.Title = update.Title
+}
+if update.Game != "" {
+    tournament.Game = update.Game
+}
+if update.Description != "" {
+    tournament.Description = update.Description
+}
+if !update.StartDate.IsZero() {
+    tournament.StartDate = update.StartDate
+}
+if !update.RegistrationDeadline.IsZero() {
+    tournament.RegistrationDeadline = update.RegistrationDeadline
+}
+if update.EntryFee != nil {
+    tournament.EntryFee = *update.EntryFee
+}
+if update.PrizePool != nil {
+    tournament.PrizePool = *update.PrizePool
+}
+if update.MaxTeams != nil {
+    tournament.MaxTeams = *update.MaxTeams
+}
+if update.Status != "" {
+    tournament.Status = update.Status
+}
+if update.IsVIP != nil {
+    tournament.IsVIP = *update.IsVIP
+}
+if update.BannerURL != nil {
+    tournament.BannerURL = update.BannerURL
+}
+    
 
     query := `
         UPDATE tournaments
         SET title = $1, game = $2, description = $3, start_date = $4, registration_deadline = $5,
-            entry_fee = $6, prize_pool = $7, max_teams = $8, status = $9, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $10
-        RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, approved_by, approved_at, created_at, updated_at
+            entry_fee = $6, prize_pool = $7, max_teams = $8, status = $9, is_vip = $10, banner_url = $11, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $12
+        RETURNING id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, approved_by, approved_at, is_vip, banner_url, created_at, updated_at
     `
 
     err = r.db.Pool.QueryRow(ctx, query,
         tournament.Title, tournament.Game, tournament.Description,
         tournament.StartDate, tournament.RegistrationDeadline,
         tournament.EntryFee, tournament.PrizePool, tournament.MaxTeams,
-        tournament.Status, id,
+        tournament.Status, tournament.IsVIP, tournament.BannerURL, id,
     ).Scan(
         &tournament.ID, &tournament.Title, &tournament.Game, &tournament.Description,
         &tournament.StartDate, &tournament.RegistrationDeadline,
         &tournament.EntryFee, &tournament.PrizePool, &tournament.MaxTeams,
         &tournament.Status, &tournament.OrganizerID,
         &tournament.ApprovedBy, &tournament.ApprovedAt,
+        &tournament.IsVIP, &tournament.BannerURL,
         &tournament.CreatedAt, &tournament.UpdatedAt,
     )
     if err != nil {
@@ -285,7 +292,6 @@ func (r *TournamentRepository) Update(ctx context.Context, id int, update *model
 
     return tournament, nil
 }
-
 // Delete - удаление турнира
 func (r *TournamentRepository) Delete(ctx context.Context, id int) error {
     query := `DELETE FROM tournaments WHERE id = $1`

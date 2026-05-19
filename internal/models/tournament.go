@@ -58,5 +58,6 @@ type TournamentUpdate struct {
     PrizePool            *float64         `json:"prize_pool"`   
     MaxTeams             *int             `json:"max_teams"`
     Status               TournamentStatus `json:"status"`
-    IsVIP                bool             `json:"is_vip"`
+    IsVIP                *bool             `json:"is_vip"`
+    BannerURL           *string          `json:"banner_url"` 
 }

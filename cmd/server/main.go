@@ -113,7 +113,8 @@ func main() {
     api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
-
+    api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
+    
     // Команды
     api.HandleFunc("/client/teams", clientHandler.ListTeams).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/teams", clientHandler.CreateTeam).Methods("POST", "OPTIONS")
