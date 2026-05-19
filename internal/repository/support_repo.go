@@ -42,6 +42,7 @@ func (r *SupportRepository) GetMessages(ctx context.Context, userID int, limit, 
         ORDER BY created_at ASC
         LIMIT $2 OFFSET $3
     `
+    
 
     rows, err := r.db.Pool.Query(ctx, query, userID, limit, offset)
     if err != nil {

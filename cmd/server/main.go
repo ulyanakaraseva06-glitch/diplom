@@ -98,7 +98,9 @@ func main() {
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
-
+    // Маршруты для чата поддержки (активные чаты)
+    api.HandleFunc("/support/chats", supportHandler.GetActiveChats).Methods("GET", "OPTIONS")
+    api.HandleFunc("/support/upload", supportHandler.UploadImage).Methods("POST", "OPTIONS")
     // Друзья
     api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/friends/list", clientHandler.GetFriendsDetailed).Methods("GET", "OPTIONS")

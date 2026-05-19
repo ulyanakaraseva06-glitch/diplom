@@ -258,16 +258,16 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
     var response []map[string]interface{}
     for _, msg := range messages {
-        text, img := parseImageFromMessage(msg.Message)
-        item := map[string]interface{}{
-            "id":           msg.ID,
-            "user_id":      msg.UserID,
-            "message":      text,
-            "image_url":    img,
-            "is_from_user": msg.IsFromUser,
-            "is_read":      msg.IsRead,
-            "created_at":   msg.CreatedAt,
-        }
+    item := map[string]interface{}{
+        "id":           msg.ID,
+        "user_id":      msg.UserID,
+        "message":      msg.Message,
+        "image_url":    msg.ImageURL,   //直接用 msg.ImageURL
+        "is_from_user": msg.IsFromUser,
+        "is_read":      msg.IsRead,
+        "created_at":   msg.CreatedAt,
+    }
+   
 
         if msg.ManagerID != nil {
             item["manager_id"] = *msg.ManagerID
@@ -483,6 +483,7 @@ if role == "manager" {
             "id":           message.ID,
             "user_id":      userID,
             "message":      msg.Message,
+            "image_url":    imageURL,
             "is_from_user": isFromUser,
             "is_read":      false,
             "created_at":   message.CreatedAt,

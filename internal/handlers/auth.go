@@ -97,9 +97,9 @@ func verifyPassword(hash, plain string) bool {
 			return true
 		}
 		// В bd.sql у части пользователей подставлен невалидный bcrypt — типичный пароль password
-		if errors.Is(err, bcrypt.ErrHashTooShort) || errors.Is(err, bcrypt.ErrHashInvalid) {
-			return plain == "password" || plain == "123456"
-		}
+		if errors.Is(err, bcrypt.ErrHashTooShort) {
+    return plain == "password" || plain == "123456"
+}
 		return false
 	}
 	return hash == plain

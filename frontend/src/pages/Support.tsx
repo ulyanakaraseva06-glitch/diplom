@@ -76,7 +76,7 @@ const Support: React.FC = () => {
       try {
         setLoading(true);
         const response = await supportApi.getMessages(selectedUserId);
-console.log('Loaded messages:', response.data);
+console.log('Loaded messages with images:', response.data);
 setMessages(response.data || []);
         await supportApi.markAsRead(selectedUserId);
       } catch (err: any) {
