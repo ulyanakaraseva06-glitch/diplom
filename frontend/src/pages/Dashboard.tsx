@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
+import ComputerIcon from '@mui/icons-material/Computer';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import BlockIcon from '@mui/icons-material/Block';
@@ -89,6 +90,14 @@ const loadStats = async () => {
           <Typography variant="body2" sx={{ mr: 2 }}>
             {user?.username} ({user?.role === 'manager' ? 'Менеджер' : user?.role === 'organizer' ? 'Организатор' : 'Игрок'})
           </Typography>
+          <Button
+            color="inherit"
+            startIcon={<ComputerIcon />}
+            onClick={() => navigate('/themes')}
+            sx={{ mr: 1 }}
+          >
+            Темы
+          </Button>
           <IconButton color="inherit" onClick={handleLogout}>
             <LogoutIcon />
           </IconButton>

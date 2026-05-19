@@ -15,7 +15,7 @@ import {
   Alert,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { HeroModel, heroModelImageUrl } from '../config/heroModels';
+import { HeroModel, heroDisplayName, heroModelImageUrl } from '../config/heroModels';
 
 type Props = {
   open: boolean;
@@ -36,7 +36,7 @@ const ChooseHeroModelDialog: React.FC<Props> = ({
 }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 700 }}>Выберите модель</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700 }}>Выберите героя</DialogTitle>
       <DialogContent dividers>
         {models.length === 0 ? (
           <Alert severity="info" sx={{ mb: 2 }}>
@@ -80,7 +80,7 @@ const ChooseHeroModelDialog: React.FC<Props> = ({
                       <CardMedia
                         component="img"
                         image={heroModelImageUrl(model)}
-                        alt={model.name}
+                        alt={heroDisplayName(model)}
                         sx={{
                           height: 160,
                           objectFit: 'contain',
@@ -94,10 +94,7 @@ const ChooseHeroModelDialog: React.FC<Props> = ({
                       />
                       <Box sx={{ p: 1.5 }}>
                         <Typography variant="subtitle2" fontWeight={600}>
-                          {model.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" display="block" noWrap>
-                          {model.file.includes('/') ? model.file.split('/').pop() : model.file}
+                          {heroDisplayName(model)}
                         </Typography>
                         {active && (
                           <Chip label="Выбрано" size="small" color="primary" sx={{ mt: 1 }} />

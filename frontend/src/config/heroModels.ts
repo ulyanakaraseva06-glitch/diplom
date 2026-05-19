@@ -19,6 +19,12 @@ export const FALLBACK_HERO_MODELS: HeroModel[] = [
   },
 ];
 
+/** Подпись героя в UI (PUBG — всегда «pubg»). */
+export function heroDisplayName(model: HeroModel): string {
+  if (model.id === 'pubg' || model.id === 'pubg-fone') return 'pubg';
+  return model.name;
+}
+
 export function heroModelImageUrl(model: HeroModel): string {
   if (
     model.file.startsWith('http') ||

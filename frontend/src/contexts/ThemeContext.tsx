@@ -14,7 +14,7 @@ interface ThemeContextType {
   currentTheme: any;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, token } = useAuth();

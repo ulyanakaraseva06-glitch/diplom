@@ -6,6 +6,7 @@ import ChooseHeroModelDialog from './ChooseHeroModelDialog';
 import {
   HeroModel,
   fetchHeroModels,
+  heroDisplayName,
   heroModelImageUrl,
   loadSelectedModelId,
   resolveSelectedModel,
@@ -81,6 +82,8 @@ const LunoxSpinFigure: React.FC = () => {
     setModels(list);
     if (list.length === 0) {
       setLoadError(`В папке ${MODELS_FOLDER_HINT} нет картинок. Добавьте .png/.jpg и перезапустите npm start.`);
+      setSelected(null);
+      setSrc('');
       return;
     }
     const savedId = loadSelectedModelId();
@@ -96,8 +99,7 @@ const LunoxSpinFigure: React.FC = () => {
     applyModel(model);
   };
 
-  const title = selected?.tagline?.split('·')[0]?.trim() || selected?.name || 'Hero';
-  const caption = selected?.tagline || selected?.name || '';
+  const heroName = selected ? heroDisplayName(selected) : '';
 
   return (
     <>
@@ -112,20 +114,24 @@ const LunoxSpinFigure: React.FC = () => {
           py: 1,
         }}
       >
-        <Typography
-          variant="overline"
-          sx={{
-            flexShrink: 0,
-            letterSpacing: '0.25em',
-            color: 'primary.main',
-            fontWeight: 700,
-            textAlign: 'center',
-            width: '100%',
-            pointerEvents: 'none',
-          }}
-        >
-          {title}
-        </Typography>
+        {heroName && (
+          <Typography
+            variant="h6"
+            sx={{
+              flexShrink: 0,
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              color: 'primary.main',
+              fontWeight: 700,
+              textAlign: 'center',
+              width: '100%',
+              pointerEvents: 'none',
+              mb: 1,
+            }}
+          >
+            {heroName}
+          </Typography>
+        )}
 
         {loadError && (
           <Alert severity="warning" sx={{ mx: 1, mb: 1, pointerEvents: 'auto', fontSize: '0.75rem' }}>
@@ -179,7 +185,7 @@ const LunoxSpinFigure: React.FC = () => {
                   animation: `${orbit} 18s linear infinite`,
                 }}
               />
-              <SpinningHeroImage src={src} alt={selected?.name || ''} />
+              <SpinningHeroImage src={src} alt={heroName} />
             </Box>
           ) : (
             <Typography color="text.secondary" variant="body2" sx={{ px: 2, textAlign: 'center' }}>
@@ -188,23 +194,7 @@ const LunoxSpinFigure: React.FC = () => {
           )}
         </Box>
 
-        <Typography
-          variant="caption"
-          sx={{
-            flexShrink: 0,
-            color: 'text.secondary',
-            textAlign: 'center',
-            letterSpacing: '0.08em',
-            width: '100%',
-            mb: 1,
-            pointerEvents: 'none',
-          }}
-        >
-          {caption}
-          {models.length > 0 ? ` · ${models.length} шт.` : ''}
-        </Typography>
-
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center', pointerEvents: 'auto' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center', pointerEvents: 'auto', mt: 1 }}>
           <Button
             size="small"
             variant="outlined"
@@ -215,7 +205,7 @@ const LunoxSpinFigure: React.FC = () => {
               color: 'primary.light',
             }}
           >
-            Выбрать модель
+            Выбрать героя
           </Button>
           <Button
             size="small"

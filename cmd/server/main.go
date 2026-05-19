@@ -144,6 +144,8 @@ func main() {
     api.HandleFunc("/client/profile", clientHandler.GetProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/profile/game-cards", clientHandler.UpdateProfileGameCards).Methods("PUT", "OPTIONS")
     api.HandleFunc("/client/profile/avatar", clientHandler.UpdateProfileAvatar).Methods("PUT", "OPTIONS")
+    api.HandleFunc("/client/theme", clientHandler.GetUserTheme).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/theme", clientHandler.UpdateUserTheme).Methods("PUT", "OPTIONS")
     api.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
     api.HandleFunc("/auth/update", authHandler.UpdateUser).Methods("PUT", "OPTIONS")
 

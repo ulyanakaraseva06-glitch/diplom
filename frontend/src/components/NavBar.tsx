@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ThemeContext } from '../contexts/ThemeContext';
 import {
   AppBar,
   Toolbar,
@@ -28,14 +29,24 @@ import { mediaUrl } from '../utils/media';
 
 const NavBar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
+  const themeCtx = useContext(ThemeContext);
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const logoFile =
+    themeCtx?.theme === 'light'
+      ? 'logo_pikmi.jpg'
+      : themeCtx?.theme === 'dark'
+        ? 'logo_bad.jpg'
+        : 'logo.jpg';
+  const logoSrc = `${process.env.PUBLIC_URL}/${logoFile}`;
 
   const hasToken = !!localStorage.getItem('token');
   const showAuth = isAuthenticated || hasToken;
   const showGuest = !showAuth;
   const isManager = user?.role === 'manager';
   const isClientUser = user?.role === 'user';
+  const showProfileMenu = !showGuest;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -70,7 +81,7 @@ const NavBar: React.FC = () => {
         >
           <Box
             component="img"
-            src={`${process.env.PUBLIC_URL}/logo.jpg`}
+            src={logoSrc}
             alt="GAMER.OK"
             sx={{
               height: { xs: 96, sm: 112 },
@@ -144,11 +155,7 @@ const NavBar: React.FC = () => {
               </Button>
             )}
 
-            {isManager ? (
-              <Button color="inherit" startIcon={<Logout />} onClick={handleLogout} sx={{ ml: 2 }}>
-                Выйти
-              </Button>
-            ) : (
+            {showProfileMenu && (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 2 }} onClick={handleMenuOpen}>
                   <Avatar
@@ -172,15 +179,24 @@ const NavBar: React.FC = () => {
                   <MenuItem onClick={() => go('/profile')}>
                     <AccountCircle sx={{ mr: 1 }} /> Мой профиль
                   </MenuItem>
-                  <MenuItem onClick={() => go('/wallet')}>
-                    <AccountBalanceWallet sx={{ mr: 1 }} /> Мой кошелёк
-                  </MenuItem>
+                  {isClientUser && (
+                    <MenuItem onClick={() => go('/wallet')}>
+                      <AccountBalanceWallet sx={{ mr: 1 }} /> Мой кошелёк
+                    </MenuItem>
+                  )}
                   <MenuItem onClick={() => go('/themes')}>
                     <Computer sx={{ mr: 1 }} /> Темы
                   </MenuItem>
-                  <MenuItem onClick={goTournaments}>
-                    <EmojiEvents sx={{ mr: 1 }} /> Турниры
-                  </MenuItem>
+                  {!isManager && (
+                    <MenuItem onClick={goTournaments}>
+                      <EmojiEvents sx={{ mr: 1 }} /> Турниры
+                    </MenuItem>
+                  )}
+                  {isManager && (
+                    <MenuItem onClick={() => go('/dashboard')}>
+                      <AdminPanelSettings sx={{ mr: 1 }} /> Админ-панель
+                    </MenuItem>
+                  )}
                   <Divider />
                   <MenuItem onClick={handleLogout}>
                     <Logout sx={{ mr: 1 }} /> Выйти
