@@ -9,13 +9,15 @@ type SupportMessage struct {
     UserID     int       `json:"user_id"`
     ManagerID  *int      `json:"manager_id,omitempty"`
     Message    string    `json:"message"`
+    ImageURL   string    `json:"image_url,omitempty"`
     IsFromUser bool      `json:"is_from_user"`
     IsRead     bool      `json:"is_read"`
     CreatedAt  time.Time `json:"created_at"`
 }
 
 type SupportMessageCreate struct {
-    Message string `json:"message"`
+    Message  string `json:"message"`
+    ImageURL string `json:"image_url,omitempty"`
 }
 
 type SupportMessageResponse struct {
@@ -25,6 +27,7 @@ type SupportMessageResponse struct {
     ManagerID   *int      `json:"manager_id,omitempty"`
     ManagerName string    `json:"manager_name,omitempty"`
     Message     string    `json:"message"`
+    ImageURL    string    `json:"image_url,omitempty"`
     IsFromUser  bool      `json:"is_from_user"`
     IsRead      bool      `json:"is_read"`
     CreatedAt   time.Time `json:"created_at"`

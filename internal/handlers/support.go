@@ -14,6 +14,11 @@ import (
 
     "github.com/gorilla/mux"
     "github.com/gorilla/websocket"
+    "io"
+    "os"
+    "path/filepath"
+    "fmt"
+
 )
 
 type Client struct {
@@ -44,6 +49,90 @@ func NewSupportHandler(supportRepo *repository.SupportRepository, userRepo *repo
     }
 }
 
+// GetActiveChats - список пользователей с активными чатами (для менеджера)
+func (h *SupportHandler) GetActiveChats(w http.ResponseWriter, r *http.Request) {
+    role, _ := middleware.GetUserRole(r.Context())
+    if role != "manager" {
+        http.Error(w, "Forbidden", http.StatusForbidden)
+        return
+    }
+
+  chats, err := h.supportRepo.GetUsersWithActiveChats(r.Context())
+    if err != nil {
+        http.Error(w, "Failed to load active chats: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(chats)
+}
+// UploadImage - загрузка изображения для чата
+func (h *SupportHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
+    // Проверяем авторизацию
+    _, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Ограничение размера файла (5 MB)
+    r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
+    err := r.ParseMultipartForm(5 << 20)
+    if err != nil {
+        http.Error(w, "File too large or invalid form", http.StatusBadRequest)
+        return
+    }
+
+    file, handler, err := r.FormFile("image")
+    if err != nil {
+        http.Error(w, "Failed to get image file", http.StatusBadRequest)
+        return
+    }
+    defer file.Close()
+
+    // Проверяем тип файла
+    allowedTypes := map[string]bool{
+        "image/jpeg": true,
+        "image/png":  true,
+        "image/gif":  true,
+        "image/webp": true,
+    }
+    contentType := handler.Header.Get("Content-Type")
+    if !allowedTypes[contentType] {
+        http.Error(w, "Invalid file type. Only JPEG, PNG, GIF, WEBP allowed", http.StatusBadRequest)
+        return
+    }
+
+    // Создаём папку для загрузок (если нет)
+    uploadDir := "uploads/support"
+    if err := os.MkdirAll(uploadDir, 0755); err != nil {
+        http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
+        return
+    }
+
+    // Генерируем уникальное имя файла
+    ext := filepath.Ext(handler.Filename)
+    filename := fmt.Sprintf("%d_%d%s", time.Now().UnixNano(), time.Now().Unix(), ext)
+    filePath := filepath.Join(uploadDir, filename)
+
+    // Сохраняем файл
+    dst, err := os.Create(filePath)
+    if err != nil {
+        http.Error(w, "Failed to save file", http.StatusInternalServerError)
+        return
+    }
+    defer dst.Close()
+
+    if _, err := io.Copy(dst, file); err != nil {
+        http.Error(w, "Failed to save file", http.StatusInternalServerError)
+        return
+    }
+
+    // Возвращаем URL для доступа к файлу
+    imageURL := fmt.Sprintf("/uploads/support/%s", filename)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{"url": imageURL})
+}
 // SendMessage - отправка сообщения (HTTP, для отправки от менеджера)
 func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
@@ -65,19 +154,24 @@ func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    if req.Message == "" {
-        http.Error(w, "Message is required", http.StatusBadRequest)
-        return
-    }
+    if req.Message == "" && req.ImageURL == "" {
+    http.Error(w, "Message or image is required", http.StatusBadRequest)
+    return
+}
 
-    message := &models.SupportMessage{
-        UserID:     userID,
-        ManagerID:  &managerID,
-        Message:    req.Message,
-        IsFromUser: false,
-        IsRead:     false,
-        CreatedAt:  time.Now(),
-    }
+    imageURL := req.ImageURL
+if imageURL == "" {
+    imageURL = ""
+}
+message := &models.SupportMessage{
+    UserID:     userID,
+    ManagerID:  &managerID,
+    Message:    req.Message,
+    ImageURL:   imageURL,
+    IsFromUser: false,
+    IsRead:     false,
+    CreatedAt:  time.Now(),
+}
 
     err = h.supportRepo.Create(r.Context(), message)
     if err != nil {
@@ -98,15 +192,16 @@ func (h *SupportHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
         }
 
         response := map[string]interface{}{
-            "id":            message.ID,
-            "user_id":       userID,
-            "message":       message.Message,
-            "is_from_user":  false,
-            "is_read":       false,
-            "created_at":    message.CreatedAt,
-            "manager_name":  managerName,
-            "username":      managerName,
-        }
+    "id":            message.ID,
+    "user_id":       userID,
+    "message":       message.Message,
+    "image_url":     message.ImageURL,   // добавить эту строку
+    "is_from_user":  false,
+    "is_read":       false,
+    "created_at":    message.CreatedAt,
+    "manager_name":  managerName,
+    "username":      managerName,
+}
         client.Conn.WriteJSON(response)
     }
 
@@ -120,19 +215,23 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
     userID, err := strconv.Atoi(vars["user_id"])
     if err != nil {
+        log.Printf("GetMessages: invalid user_id: %v", err)
         http.Error(w, "Invalid user ID", http.StatusBadRequest)
         return
     }
 
     managerID, ok := middleware.GetUserID(r.Context())
     if !ok {
+        log.Printf("GetMessages: unauthorized")
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
     role, _ := middleware.GetUserRole(r.Context())
+    log.Printf("GetMessages: userID=%d, managerID=%d, role=%s", userID, managerID, role)
 
     if role != "manager" && managerID != userID {
+        log.Printf("GetMessages: forbidden - role=%s, managerID=%d, userID=%d", role, managerID, userID)
         http.Error(w, "Forbidden", http.StatusForbidden)
         return
     }
@@ -152,9 +251,10 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
     messages, err := h.supportRepo.GetMessages(r.Context(), userID, limit, offset)
     if err != nil {
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
+    log.Printf("GetMessages: repository error for userID=%d: %v", userID, err)
+    http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+    return
+}
 
     var response []map[string]interface{}
     for _, msg := range messages {
@@ -335,13 +435,25 @@ func (h *SupportHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
             isFromUser = false
         }
 
-        message := &models.SupportMessage{
-            UserID:     userID,
-            Message:    msg.Message,
-            IsFromUser: isFromUser,
-            IsRead:     false,
-            CreatedAt:  time.Now(),
-        }
+   // Определяем imageURL
+imageURL := msg.ImageURL
+if imageURL == "" {
+    imageURL = ""
+}
+
+message := &models.SupportMessage{
+    UserID:     userID,
+    Message:    msg.Message,
+    ImageURL:   imageURL,
+    IsFromUser: isFromUser,
+    IsRead:     false,
+    CreatedAt:  time.Now(),
+}
+
+if role == "manager" {
+    managerID := int(tokenUserID)
+    message.ManagerID = &managerID
+}
 
         if role == "manager" {
             managerID := int(tokenUserID)

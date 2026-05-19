@@ -20,18 +20,26 @@ import (
 
 type AuthHandler struct {
 	userRepo    *repository.UserRepository
+    banRepo     *repository.BanRepository  
 	syncService *services.SyncService
 	mongoDB     *mongo.Database
 	jwtSecret   []byte
 }
 
-func NewAuthHandler(userRepo *repository.UserRepository, syncService *services.SyncService, mongoDB *mongo.Database, jwtSecret string) *AuthHandler {
-	return &AuthHandler{
-		userRepo:    userRepo,
-		syncService: syncService,
-		mongoDB:     mongoDB,
-		jwtSecret:   []byte(jwtSecret),
-	}
+func NewAuthHandler(
+    userRepo *repository.UserRepository,
+    banRepo *repository.BanRepository,   // добавить параметр
+    syncService *services.SyncService,
+    mongoDB *mongo.Database,
+    jwtSecret string,
+) *AuthHandler {
+    return &AuthHandler{
+        userRepo:    userRepo,
+        banRepo:     banRepo,   // добавить
+        syncService: syncService,
+        mongoDB:     mongoDB,
+        jwtSecret:   []byte(jwtSecret),
+    }
 }
 
 func (h *AuthHandler) hasActiveSubscription(userID int) bool {
@@ -162,7 +170,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
             log.Printf("Login: failed to sync user %d to MongoDB: %v", user.ID, err)
         }
     }
+// В методе Login, после проверки пароля:
 
+// Проверяем полную блокировку
+ban, err := h.banRepo.GetActiveBanByUser(r.Context(), user.ID)
+if err != nil {
+    http.Error(w, "Database error", http.StatusInternalServerError)
+    return
+}
+if ban != nil && ban.BanType == models.BanTypeFull {
+    http.Error(w, "Your account is banned. Reason: "+ban.Reason, http.StatusForbidden)
+    return
+}
     // Генерация JWT токена
     token, err := h.generateToken(user.ID, user.Role)
     if err != nil {

@@ -2,9 +2,15 @@ import Grid from '@mui/material/Grid';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bansApi } from '../api/bans';
-import { Ban, BanRequest } from '../types';
+import { Ban, BanRequest, BanType } from '../types';
 import Papa from 'papaparse';
 import DownloadIcon from '@mui/icons-material/Download';
+import {
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import {
   Container,
   Typography,
@@ -42,36 +48,42 @@ const Bans: React.FC = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [formData, setFormData] = useState<BanRequest>({
     user_id: 0,
+    ban_type: 'full_ban',
     reason: '',
+    comment: '',
     expires_at: '',
   });
-const exportToCSV = () => {
-  if (!bans || bans.length === 0) {
-    alert('Нет данных для экспорта');
-    return;
-  }
 
-  const exportData = bans.map(ban => ({
-    'ID': ban.id,
-    'Пользователь': ban.username || ban.user_id,
-    'Модератор': ban.moderator_name || ban.moderator_id,
-    'Причина': ban.reason,
-    'Дата блокировки': new Date(ban.banned_at).toLocaleString(),
-    'Действует до': ban.expires_at ? new Date(ban.expires_at).toLocaleString() : 'Бессрочно',
-    'Активна': ban.is_active ? 'Да' : 'Нет',
-  }));
+  const exportToCSV = () => {
+    if (!bans || bans.length === 0) {
+      alert('Нет данных для экспорта');
+      return;
+    }
 
-  const csv = Papa.unparse(exportData);
-  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute('download', `блокировки_${new Date().toISOString().slice(0, 19)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
+    const exportData = bans.map(ban => ({
+      'ID': ban.id,
+      'Пользователь': ban.username || ban.user_id,
+      'Модератор': ban.moderator_name || ban.moderator_id,
+      'Тип блокировки': ban.ban_type_label || ban.ban_type,
+      'Причина': ban.reason,
+      'Комментарий': ban.comment || '',
+      'Дата блокировки': new Date(ban.banned_at).toLocaleString(),
+      'Действует до': ban.expires_at ? new Date(ban.expires_at).toLocaleString() : 'Бессрочно',
+      'Активна': ban.is_active ? 'Да' : 'Нет',
+    }));
+
+    const csv = Papa.unparse(exportData);
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.setAttribute('download', `блокировки_${new Date().toISOString().slice(0, 19)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const loadBans = async () => {
     try {
       setLoading(true);
@@ -85,7 +97,6 @@ const exportToCSV = () => {
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
     loadBans();
@@ -101,45 +112,64 @@ const exportToCSV = () => {
     }
   };
 
-const handleCreateBan = async () => {
-  if (!formData.user_id || !formData.reason) {
-    setError('Укажите ID пользователя и причину блокировки');
-    return;
-  }
-  
-  // Формируем тело запроса
-  const body: { user_id: number; reason: string; expires_at?: string } = {
-    user_id: formData.user_id,
-    reason: formData.reason,
+  const handleCreateBan = async () => {
+    if (!formData.user_id || !formData.reason) {
+      setError('Укажите ID пользователя и причину блокировки');
+      return;
+    }
+
+    // Формируем тело запроса
+    const body: any = {
+      user_id: formData.user_id,
+      ban_type: formData.ban_type,
+      reason: formData.reason,
+    };
+
+    if (formData.comment && formData.comment.trim() !== '') {
+      body.comment = formData.comment;
+    }
+
+    // Добавляем expires_at только если есть значение
+    if (formData.expires_at && formData.expires_at.trim() !== '') {
+      body.expires_at = formData.expires_at + ':00Z';
+    }
+
+    console.log('Отправляемые данные:', body);
+
+    try {
+      await bansApi.create(body);
+      setOpenDialog(false);
+      setFormData({
+        user_id: 0,
+        ban_type: 'full_ban',
+        reason: '',
+        comment: '',
+        expires_at: '',
+      });
+      loadBans();
+    } catch (err: any) {
+      console.error('Ошибка:', err.response?.data);
+      setError(err.response?.data?.message || 'Ошибка создания блокировки');
+    }
   };
-  
-  
-  // Добавляем expires_at только если есть значение, и форматируем его
-  if (formData.expires_at && formData.expires_at.trim() !== '') {
-    // Преобразуем "2026-05-02T01:46" в "2026-05-02T01:46:00Z"
-    body.expires_at = formData.expires_at + ':00Z';
-  }
-  
-  console.log('Отправляемые данные:', body);
-  
-  try {
-    await bansApi.create(body);
-    setOpenDialog(false);
-    setFormData({ user_id: 0, reason: '', expires_at: '' });
-    loadBans();
-  } catch (err: any) {
-    console.error('Ошибка:', err.response?.data);
-    setError(err.response?.data?.message || 'Ошибка создания блокировки');
-  }
+
+ const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const { name, value } = e.target;
+  setFormData(prev => ({
+    ...prev,
+    [name]: name === 'user_id' ? Number(value) : value,
+  }));
 };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+const handleSelectChange = (e: any) => {
+  const { name, value } = e.target;
+  if (name) {
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'user_id' ? Number(value) : value,
+      [name]: value,
     }));
-  };
+  }
+};
 
   if (!isManager) {
     return (
@@ -155,31 +185,19 @@ const handleCreateBan = async () => {
     <Container maxWidth="lg">
       <Box sx={{ mt: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-  <Typography variant="h4">Блокировки пользователей</Typography>
-  <Box sx={{ display: 'flex', gap: 2 }}>
-    <Button
-      variant="outlined"
-      startIcon={<DownloadIcon />}
-      onClick={exportToCSV}
-    >
-      Экспорт CSV
-    </Button>
-    <Button
-      variant="outlined"
-      startIcon={<HomeIcon />}
-      onClick={() => navigate('/dashboard')}
-    >
-      На главную
-    </Button>
-    <Button
-      variant="contained"
-      startIcon={<AddIcon />}
-      onClick={() => setOpenDialog(true)}
-    >
-      Заблокировать
-    </Button>
-  </Box>
-</Box>
+          <Typography variant="h4">Блокировки пользователей</Typography>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToCSV}>
+              Экспорт CSV
+            </Button>
+            <Button variant="outlined" startIcon={<HomeIcon />} onClick={() => navigate('/dashboard')}>
+              На главную
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)}>
+              Заблокировать
+            </Button>
+          </Box>
+        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -203,6 +221,7 @@ const handleCreateBan = async () => {
                   <TableCell>ID</TableCell>
                   <TableCell>Пользователь</TableCell>
                   <TableCell>Модератор</TableCell>
+                  <TableCell>Тип блокировки</TableCell>
                   <TableCell>Причина</TableCell>
                   <TableCell>Дата блокировки</TableCell>
                   <TableCell>Действует до</TableCell>
@@ -215,19 +234,21 @@ const handleCreateBan = async () => {
                     <TableCell>{ban.id}</TableCell>
                     <TableCell>{ban.username || ban.user_id}</TableCell>
                     <TableCell>{ban.moderator_name || ban.moderator_id}</TableCell>
-                    <TableCell>{ban.reason}</TableCell>
+                    <TableCell>{ban.ban_type_label || ban.ban_type}</TableCell>
+                    <TableCell>
+                      <strong>{ban.reason}</strong>
+                      {ban.comment && (
+                        <Typography variant="caption" component="div" color="text.secondary">
+                          Комментарий: {ban.comment}
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{new Date(ban.banned_at).toLocaleString()}</TableCell>
                     <TableCell>
-                      {ban.expires_at 
-                        ? new Date(ban.expires_at).toLocaleString()
-                        : 'Бессрочно'}
+                      {ban.expires_at ? new Date(ban.expires_at).toLocaleString() : 'Бессрочно'}
                     </TableCell>
                     <TableCell>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleRemoveBan(ban.user_id)}
-                      >
+                      <IconButton size="small" color="error" onClick={() => handleRemoveBan(ban.user_id)}>
                         <DeleteIcon />
                       </IconButton>
                     </TableCell>
@@ -249,28 +270,58 @@ const handleCreateBan = async () => {
             name="user_id"
             type="number"
             value={formData.user_id || ''}
-            onChange={handleChange}
+            onChange={handleTextFieldChange}
             margin="normal"
             required
           />
+
+          <FormControl fullWidth margin="normal" required>
+            <InputLabel>Тип блокировки</InputLabel>
+            <Select
+              name="ban_type"
+              value={formData.ban_type}
+              label="Тип блокировки"
+              onChange={handleSelectChange}
+            >
+              <MenuItem value="full_ban">Полная блокировка аккаунта</MenuItem>
+              <MenuItem value="tournament_ban">Запрет на участие в турнирах</MenuItem>
+              <MenuItem value="chat_ban">Запрет на отправку сообщений</MenuItem>
+              <MenuItem value="team_ban">Запрет на создание команд</MenuItem>
+              <MenuItem value="warning">Предупреждение</MenuItem>
+            </Select>
+          </FormControl>
+
           <TextField
             fullWidth
             label="Причина блокировки"
             name="reason"
             value={formData.reason}
-            onChange={handleChange}
+            onChange={handleTextFieldChange}
             margin="normal"
             multiline
             rows={2}
             required
           />
+
+          <TextField
+            fullWidth
+            label="Комментарий (подробности)"
+            name="comment"
+            value={formData.comment}
+            onChange={handleTextFieldChange}
+            margin="normal"
+            multiline
+            rows={2}
+            placeholder="Дополнительная информация о нарушении..."
+          />
+
           <TextField
             fullWidth
             label="Действует до (необязательно)"
             name="expires_at"
             type="datetime-local"
             value={formData.expires_at}
-            onChange={handleChange}
+            onChange={handleTextFieldChange}
             margin="normal"
             InputLabelProps={{ shrink: true }}
           />

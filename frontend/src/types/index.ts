@@ -93,13 +93,18 @@ export interface RegistrationRequest {
 }
 
 // Блокировка
+export type BanType = 'tournament_ban' | 'chat_ban' | 'full_ban' | 'team_ban' | 'warning';
+
 export interface Ban {
   id: number;
   user_id: number;
   username?: string;
   moderator_id: number;
   moderator_name?: string;
+  ban_type: BanType;
+  ban_type_label?: string;
   reason: string;
+  comment?: string;
   banned_at: string;
   expires_at: string | null;
   is_active: boolean;
@@ -107,26 +112,28 @@ export interface Ban {
 
 export interface BanRequest {
   user_id: number;
+  ban_type: BanType;
   reason: string;
+  comment?: string;
   expires_at?: string | null;
 }
-
 // Сообщение чата
 export interface SupportMessage {
   id: number;
   user_id: number;
-  username?: string;
   manager_id?: number;
   manager_name?: string;
   message: string;
-  image_url?: string;
+  image_url?: string;  // добавить
   is_from_user: boolean;
   is_read: boolean;
   created_at: string;
+  username?: string;
 }
 
 export interface SupportMessageCreate {
   message: string;
+  image_url?: string; 
 }
 
 export interface Participant {
@@ -150,4 +157,11 @@ export interface UserSubscription {
   end_date: string;
   is_active: boolean;
   auto_renew: boolean;
+}
+
+export interface ActiveChat {
+  id: number;
+  username: string;
+  email: string;
+  unread_count: number;
 }
