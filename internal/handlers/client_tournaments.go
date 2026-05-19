@@ -131,77 +131,93 @@ func (h *ClientHandler) GetTournamentOrganizers(w http.ResponseWriter, r *http.R
 
 // RegisterForTournament — заявка на турнир (PostgreSQL)
 func (h *ClientHandler) RegisterForTournament(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	var req struct {
-		TournamentID int    `json:"tournament_id"`
-		TeamID       string `json:"team_id"`
-		TeamName     string `json:"team_name"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-	if req.TournamentID <= 0 {
-		http.Error(w, "Tournament ID required", http.StatusBadRequest)
-		return
-	}
+    // Проверяем бан на участие в турнирах
+    if h.banRepo == nil {
+        log.Println("Warning: banRepo is nil, skipping ban check")
+    } else {
+        isTournamentBanned, err := h.banRepo.IsUserBanned(r.Context(), userID, models.BanTypeTournament)
+        if err != nil {
+            log.Printf("RegisterForTournament: ban check error for user %d: %v", userID, err)
+            http.Error(w, "Database error", http.StatusInternalServerError)
+            return
+        }
+        if isTournamentBanned {
+            http.Error(w, "You are banned from participating in tournaments", http.StatusForbidden)
+            return
+        }
+    }
 
-	tournament, err := h.tournamentRepo.FindByID(r.Context(), req.TournamentID)
-	if err != nil || tournament == nil {
-		http.Error(w, "Tournament not found", http.StatusNotFound)
-		return
-	}
-	if tournament.Status != models.TournamentStatusApproved {
-		http.Error(w, "Турнир не открыт для регистрации", http.StatusBadRequest)
-		return
-	}
-	if time.Now().After(tournament.RegistrationDeadline) {
-		http.Error(w, "Срок регистрации истёк", http.StatusBadRequest)
-		return
-	}
-	if tournament.IsVIP && !h.HasActiveSubscription(r.Context(), userID) {
-		http.Error(w, "VIP-турнир доступен только с активной подпиской", http.StatusForbidden)
-		return
-	}
+    var req struct {
+        TournamentID int    `json:"tournament_id"`
+        TeamID       string `json:"team_id"`
+        TeamName     string `json:"team_name"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+    if req.TournamentID <= 0 {
+        http.Error(w, "Tournament ID required", http.StatusBadRequest)
+        return
+    }
 
-	teamName := req.TeamName
-	if req.TeamID != "" {
-		if h.mongoDB == nil {
-			http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		team, err := h.findTeamByID(r.Context(), req.TeamID)
-		if err != nil || team == nil {
-			http.Error(w, "Команда не найдена", http.StatusBadRequest)
-			return
-		}
-		if team.LeaderID != userID {
-			http.Error(w, "Только лидер команды может подать заявку", http.StatusForbidden)
-			return
-		}
-		teamName = team.Name
-	}
-	if teamName == "" {
-		u, _ := h.userRepo.FindByID(r.Context(), userID)
-		if u != nil {
-			teamName = u.Username
-		}
-	}
+    tournament, err := h.tournamentRepo.FindByID(r.Context(), req.TournamentID)
+    if err != nil || tournament == nil {
+        http.Error(w, "Tournament not found", http.StatusNotFound)
+        return
+    }
+    if tournament.Status != models.TournamentStatusApproved {
+        http.Error(w, "Турнир не открыт для регистрации", http.StatusBadRequest)
+        return
+    }
+    if time.Now().After(tournament.RegistrationDeadline) {
+        http.Error(w, "Срок регистрации истёк", http.StatusBadRequest)
+        return
+    }
+    if tournament.IsVIP && !h.HasActiveSubscription(r.Context(), userID) {
+        http.Error(w, "VIP-турнир доступен только с активной подпиской", http.StatusForbidden)
+        return
+    }
 
-	registration, err := h.registrationRepo.Create(r.Context(), req.TournamentID, userID, teamName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return
-	}
+    teamName := req.TeamName
+    if req.TeamID != "" {
+        if h.mongoDB == nil {
+            http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
+            return
+        }
+        team, err := h.findTeamByID(r.Context(), req.TeamID)
+        if err != nil || team == nil {
+            http.Error(w, "Команда не найдена", http.StatusBadRequest)
+            return
+        }
+        if team.LeaderID != userID {
+            http.Error(w, "Только лидер команды может подать заявку", http.StatusForbidden)
+            return
+        }
+        teamName = team.Name
+    }
+    if teamName == "" {
+        u, _ := h.userRepo.FindByID(r.Context(), userID)
+        if u != nil {
+            teamName = u.Username
+        }
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(registration)
+    registration, err := h.registrationRepo.Create(r.Context(), req.TournamentID, userID, teamName)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusConflict)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(registration)
 }
 
 // GetMyRegistrations — мои заявки на турниры

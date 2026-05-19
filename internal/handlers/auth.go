@@ -69,6 +69,7 @@ type RegisterRequest struct {
 type AuthResponse struct {
     Token string            `json:"token"`
     User  *models.UserResponse `json:"user"`
+     Warning string                 `json:"warning,omitempty"`
 }
 
 func writeAuthJSONError(w http.ResponseWriter, message string, code int) {
@@ -172,6 +173,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 // Login - вход пользователя
+// Login - вход пользователя
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
     var req LoginRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -198,8 +200,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Проверка полной блокировки
     if h.banRepo != nil {
-        if ban, err := h.banRepo.GetActiveBanByUser(r.Context(), user.ID); err == nil && ban != nil {
+        if ban, err := h.banRepo.GetActiveBanByUser(r.Context(), user.ID); err == nil && ban != nil && ban.BanType == models.BanTypeFull {
             writeAuthJSONError(w, "Аккаунт заблокирован", http.StatusForbidden)
             return
         }
@@ -210,7 +213,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
         writeAuthJSONError(w, "Неверный email или пароль", http.StatusUnauthorized)
         return
     }
-    req.Password = strings.TrimSpace(req.Password)
 
     // Обновить legacy-пароль до bcrypt
     if !strings.HasPrefix(user.PasswordHash, "$2") {
@@ -237,6 +239,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
     response := AuthResponse{
         Token: token,
         User:  user.ToResponse(),
+    }
+
+    // Проверяем предупреждение
+    if h.banRepo != nil {
+        if warning, err := h.banRepo.GetActiveBanByUser(r.Context(), user.ID); err == nil && warning != nil && warning.BanType == models.BanTypeWarning {
+            response.Warning = warning.Reason
+        }
     }
 
     w.Header().Set("Content-Type", "application/json")

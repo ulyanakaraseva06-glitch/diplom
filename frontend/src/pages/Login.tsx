@@ -60,25 +60,31 @@ const Login: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    try {
-      const trimmed = { email: email.trim(), password };
-      await login(trimmed);
-      triggerConfetti();
-      setTimeout(() => {
-        const role = JSON.parse(localStorage.getItem('user') || '{}')?.role;
-        if (role === 'manager') navigate('/dashboard');
-        else navigate('/client/tournaments');
-      }, 800);
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Ошибка входа'));
-    } finally {
-      setLoading(false);
+  try {
+    const trimmed = { email: email.trim(), password };
+    const response = await login(trimmed);
+    
+    // Проверяем предупреждение (если есть в ответе)
+    if (response?.warning) {
+      alert(`⚠️ Предупреждение от администратора:\n\n${response.warning}`);
     }
-  };
+    
+    triggerConfetti();
+    setTimeout(() => {
+      const role = JSON.parse(localStorage.getItem('user') || '{}')?.role;
+      if (role === 'manager') navigate('/dashboard');
+      else navigate('/client/tournaments');
+    }, 800);
+  } catch (err: unknown) {
+    setError(getApiErrorMessage(err, 'Ошибка входа'));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleGuestLogin = () => {
     triggerConfetti();

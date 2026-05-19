@@ -3,8 +3,12 @@ package handlers
 import (
     "context"
     "encoding/json"
+    "fmt"
+    "log"
     "net/http"
     "strconv"
+    "strings"
+    "time"
 
     "esports-manager/internal/middleware"
     "esports-manager/internal/models"
@@ -16,12 +20,18 @@ import (
 type BanHandler struct {
     banRepo  *repository.BanRepository
     userRepo *repository.UserRepository
+    supportRepo *repository.SupportRepository 
 }
 
-func NewBanHandler(banRepo *repository.BanRepository, userRepo *repository.UserRepository) *BanHandler {
+func NewBanHandler(
+    banRepo *repository.BanRepository,
+    userRepo *repository.UserRepository,
+    supportRepo *repository.SupportRepository,
+) *BanHandler {
     return &BanHandler{
-        banRepo:  banRepo,
-        userRepo: userRepo,
+        banRepo:     banRepo,
+        userRepo:    userRepo,
+        supportRepo: supportRepo,
     }
 }
 
@@ -44,7 +54,6 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Проверяем, что пользователь существует
     user, err := h.userRepo.FindByID(r.Context(), req.UserID)
     if err != nil {
         http.Error(w, "Database error", http.StatusInternalServerError)
@@ -55,7 +64,6 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Нельзя заблокировать менеджера
     if user.Role == models.RoleManager {
         http.Error(w, "Cannot ban a manager", http.StatusForbidden)
         return
@@ -63,8 +71,43 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
 
     ban, err := h.banRepo.Create(r.Context(), &req, moderatorID)
     if err != nil {
+        if strings.Contains(err.Error(), "already has an active ban") {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+        }
         http.Error(w, "Failed to create ban: "+err.Error(), http.StatusInternalServerError)
         return
+    }
+
+    // Если это предупреждение (warning), отправляем сообщение в чат поддержки
+    if req.BanType == models.BanTypeWarning {
+        moderator, _ := h.userRepo.FindByID(r.Context(), moderatorID)
+        moderatorName := "Модератор"
+        if moderator != nil {
+            moderatorName = moderator.Username
+        }
+
+        // Формируем сообщение
+        messageText := fmt.Sprintf("⚠️ Вы получили предупреждение от %s\n\nПричина: %s", moderatorName, req.Reason)
+        if req.Comment != "" {
+            messageText += fmt.Sprintf("\n\nКомментарий: %s", req.Comment)
+        }
+        messageText += "\n\nЭто предупреждение не ограничивает доступ к функциям платформы, но является официальным уведомлением о нарушении."
+
+        // Создаём сообщение в чате поддержки (от менеджера пользователю)
+        supportMsg := &models.SupportMessage{
+            UserID:     req.UserID,
+            ManagerID:  &moderatorID,
+            Message:    messageText,
+            ImageURL:   "",
+            IsFromUser: false,
+            IsRead:     false,
+            CreatedAt:  time.Now(),
+        }
+        if err := h.supportRepo.Create(r.Context(), supportMsg); err != nil {
+            log.Printf("Failed to send warning message to user %d: %v", req.UserID, err)
+            // Не возвращаем ошибку, просто логируем
+        }
     }
 
     w.Header().Set("Content-Type", "application/json")

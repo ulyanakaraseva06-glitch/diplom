@@ -67,11 +67,11 @@ func main() {
     authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
-    banHandler := handlers.NewBanHandler(banRepo, userRepo)
+    banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo)
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo)
-    uploadHandler := handlers.NewUploadHandler()
+   clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
+   uploadHandler := handlers.NewUploadHandler()
 
     // Создание роутера
     r := mux.NewRouter()

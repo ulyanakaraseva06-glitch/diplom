@@ -21,6 +21,7 @@ type ClientHandler struct {
 	supportRepo      *repository.SupportRepository
 	tournamentRepo   *repository.TournamentRepository
 	registrationRepo *repository.RegistrationRepository
+    banRepo          *repository.BanRepository  
 }
 
 func NewClientHandler(
@@ -29,11 +30,13 @@ func NewClientHandler(
 	supportRepo *repository.SupportRepository,
 	tournamentRepo *repository.TournamentRepository,
 	registrationRepo *repository.RegistrationRepository,
+    banRepo *repository.BanRepository, 
 ) *ClientHandler {
 	return &ClientHandler{
 		mongoDB: mongoDB, userRepo: userRepo,
 		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
 		registrationRepo: registrationRepo,
+         banRepo:          banRepo, 
 	}
 }
 // GetUserTheme - получение темы пользователя

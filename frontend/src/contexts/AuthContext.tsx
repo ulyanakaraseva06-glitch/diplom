@@ -7,14 +7,14 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (data: LoginRequest) => Promise<void>;
+  login: (data: LoginRequest) => Promise<{ warning?: string }>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
-  updateUser: (userData: Partial<User>) => void;
+  updateUser: (userData: Partial<User>) => void;        // добавить
   isAuthenticated: boolean;
   isManager: boolean;
   isOrganizer: boolean;
-  canManageTournaments: boolean;  
+  canManageTournaments: boolean;                         // добавить
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,18 +53,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (data: LoginRequest) => {
-    const response = await authApi.login(data);
-    const { token, user } = response.data;
-
-    if (!token || !user?.id) {
-      throw new Error('Сервер вернул некорректный ответ при входе');
-    }
-
-    setToken(token);
-    setUser(user);
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
-  };
+  const response = await authApi.login(data);
+  const { token, user, warning } = response.data;
+  
+  setToken(token);
+  setUser(user);
+  localStorage.setItem('token', token);
+  localStorage.setItem('user', JSON.stringify(user));
+  
+  return { warning }; // возвращаем предупреждение
+};
 
   const register = async (data: RegisterRequest) => {
     const response = await authApi.register(data);
