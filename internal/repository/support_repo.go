@@ -145,3 +145,15 @@ func (r *SupportRepository) GetUsersWithActiveChats(ctx context.Context) ([]Acti
     }
     return result, nil
 }
+// GetTotalUnreadCountForManagers - общее количество непрочитанных сообщений от пользователей
+func (r *SupportRepository) GetTotalUnreadCountForManagers(ctx context.Context) (int, error) {
+    var count int
+    err := r.db.Pool.QueryRow(ctx, `
+        SELECT COUNT(*) FROM support_messages 
+        WHERE is_from_user = true AND is_read = false
+    `).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get total unread count: %w", err)
+    }
+    return count, nil
+}

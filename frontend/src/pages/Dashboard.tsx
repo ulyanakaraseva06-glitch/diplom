@@ -4,6 +4,7 @@ import { tournamentsApi } from '../api/tournaments';
 import { registrationsApi } from '../api/registrations';
 import { usersApi } from '../api/users';
 import { supportApi } from '../api/support';
+import { apiClient } from '../api/client';
 import {
   Container,
   Typography,
@@ -37,46 +38,37 @@ const Dashboard: React.FC = () => {
     unreadMessages: 0,
   });
 
-  const loadStats = async () => {
+const loadStats = async () => {
+  try {
+    const tournamentsRes = await tournamentsApi.getAll();
+    const allTournaments = tournamentsRes.data || [];
+    const pendingTournaments = allTournaments.filter((t: any) => t.status === 'pending');
+
+    const usersRes = await usersApi.getAll();
+    const users = usersRes.data || [];
+
+    // Получаем статистику через новый API /stats
+    let totalRegistrations = 0;
+    let unreadMessages = 0;
     try {
-      const tournamentsRes = await tournamentsApi.getAll();
-      const allTournaments = tournamentsRes.data || [];
-      const pendingTournaments = allTournaments.filter((t: any) => t.status === 'pending');
-
-      const usersRes = await usersApi.getAll();
-      const users = usersRes.data || [];
-
-      let totalRegistrations = 0;
-      if (allTournaments.length > 0) {
-        try {
-          const registrationsRes = await registrationsApi.getByTournament(allTournaments[0].id);
-          totalRegistrations = (registrationsRes.data || []).length;
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      let unreadMessages = 0;
-      if (user?.id) {
-        try {
-          const unreadRes = await supportApi.getUnreadCount(user.id);
-          unreadMessages = unreadRes.data.unread_count;
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
-      setStats({
-        totalTournaments: allTournaments.length,
-        pendingTournaments: pendingTournaments.length,
-        totalUsers: users.length,
-        totalRegistrations: totalRegistrations,
-        unreadMessages: unreadMessages,
-      });
-    } catch (err) {
-      console.error('Ошибка загрузки статистики', err);
+      const statsRes = await apiClient.get('/stats');
+      totalRegistrations = statsRes.data.total_registrations || 0;
+      unreadMessages = statsRes.data.unread_messages || 0;
+    } catch (e) {
+      console.error('Ошибка загрузки статистики заявок/сообщений', e);
     }
-  };
+
+    setStats({
+      totalTournaments: allTournaments.length,
+      pendingTournaments: pendingTournaments.length,
+      totalUsers: users.length,
+      totalRegistrations: totalRegistrations,
+      unreadMessages: unreadMessages,
+    });
+  } catch (err) {
+    console.error('Ошибка загрузки статистики', err);
+  }
+};
 
   useEffect(() => {
     loadStats();

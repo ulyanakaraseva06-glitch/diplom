@@ -38,6 +38,7 @@ func main() {
     supportRepo := repository.NewSupportRepository(database)
     bracketRepo := repository.NewBracketRepository(database)
 
+    statsHandler := handlers.NewStatsHandler(registrationRepo, supportRepo)
     // MongoDB — опционально (турниры на клиенте читаются из PostgreSQL)
     var syncService *services.SyncService
     var mongoClient *mongo.MongoClient
@@ -154,7 +155,7 @@ func main() {
     // Маршруты для административного модуля
     api.HandleFunc("/admin/users", userHandler.ListUsers).Methods("GET", "OPTIONS")
     api.HandleFunc("/admin/users/{id:[0-9]+}", userHandler.GetUserByID).Methods("GET", "OPTIONS")
-
+    api.HandleFunc("/stats", statsHandler.GetStats).Methods("GET", "OPTIONS")
     // Маршруты для турниров
     api.HandleFunc("/tournaments", tournamentHandler.ListTournaments).Methods("GET", "OPTIONS")
     api.HandleFunc("/tournaments", tournamentHandler.CreateTournament).Methods("POST", "OPTIONS")

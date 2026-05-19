@@ -333,3 +333,12 @@ func (r *RegistrationRepository) ListApplications(ctx context.Context, organizer
     }
     return out, nil
 }
+// CountAll - общее количество заявок
+func (r *RegistrationRepository) CountAll(ctx context.Context) (int, error) {
+    var count int
+    err := r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM tournament_registrations`).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to count registrations: %w", err)
+    }
+    return count, nil
+}
