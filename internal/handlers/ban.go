@@ -39,8 +39,8 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    if req.UserID == 0 || req.Reason == "" {
-        http.Error(w, "User ID and reason are required", http.StatusBadRequest)
+    if req.UserID == 0 || req.Reason == "" || req.BanType == "" {
+        http.Error(w, "User ID, ban type and reason are required", http.StatusBadRequest)
         return
     }
 

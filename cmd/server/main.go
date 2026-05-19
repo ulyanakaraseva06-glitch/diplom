@@ -63,7 +63,7 @@ func main() {
     }
 
     // Инициализация хендлеров
-    authHandler := handlers.NewAuthHandler(userRepo, syncService, mongoDatabase, cfg.JWTSecret)
+    authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
     banHandler := handlers.NewBanHandler(banRepo, userRepo)

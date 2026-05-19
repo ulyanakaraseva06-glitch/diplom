@@ -20,7 +20,6 @@ func NewBanRepository(db *db.PostgresDB) *BanRepository {
 
 // Create - создание блокировки
 func (r *BanRepository) Create(ctx context.Context, ban *models.BanRequest, moderatorID int) (*models.Ban, error) {
-    // Проверяем, есть ли активная блокировка
     existing, err := r.FindActiveByUserID(ctx, ban.UserID)
     if err != nil {
         return nil, err
@@ -29,16 +28,18 @@ func (r *BanRepository) Create(ctx context.Context, ban *models.BanRequest, mode
         return nil, fmt.Errorf("user already has an active ban")
     }
 
-    query := `
-        INSERT INTO bans (user_id, moderator_id, reason, expires_at, is_active)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, user_id, moderator_id, reason, banned_at, expires_at, is_active
-    `
+   query := `
+    INSERT INTO bans (user_id, moderator_id, ban_type, reason, comment, expires_at, is_active)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, user_id, moderator_id, ban_type, reason, comment, banned_at, expires_at, is_active
+`
 
     var newBan models.Ban
-    err = r.db.Pool.QueryRow(ctx, query, ban.UserID, moderatorID, ban.Reason, ban.ExpiresAt, true).Scan(
-        &newBan.ID, &newBan.UserID, &newBan.ModeratorID, &newBan.Reason,
-        &newBan.BannedAt, &newBan.ExpiresAt, &newBan.IsActive,
+    err = r.db.Pool.QueryRow(ctx, query,
+        ban.UserID, moderatorID, ban.BanType, ban.Reason, ban.Comment, ban.ExpiresAt, true,
+    ).Scan(
+        &newBan.ID, &newBan.UserID, &newBan.ModeratorID, &newBan.BanType,
+        &newBan.Reason, &newBan.Comment, &newBan.BannedAt, &newBan.ExpiresAt, &newBan.IsActive,
     )
     if err != nil {
         return nil, fmt.Errorf("failed to create ban: %w", err)
@@ -50,7 +51,7 @@ func (r *BanRepository) Create(ctx context.Context, ban *models.BanRequest, mode
 // FindActiveByUserID - поиск активной блокировки пользователя
 func (r *BanRepository) FindActiveByUserID(ctx context.Context, userID int) (*models.Ban, error) {
     query := `
-        SELECT id, user_id, moderator_id, reason, banned_at, expires_at, is_active
+        SELECT id, user_id, moderator_id, ban_type, reason, comment, banned_at, expires_at, is_active
         FROM bans
         WHERE user_id = $1 AND is_active = TRUE
           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
@@ -59,8 +60,8 @@ func (r *BanRepository) FindActiveByUserID(ctx context.Context, userID int) (*mo
 
     var ban models.Ban
     err := r.db.Pool.QueryRow(ctx, query, userID).Scan(
-        &ban.ID, &ban.UserID, &ban.ModeratorID, &ban.Reason,
-        &ban.BannedAt, &ban.ExpiresAt, &ban.IsActive,
+        &ban.ID, &ban.UserID, &ban.ModeratorID, &ban.BanType,
+        &ban.Reason, &ban.Comment, &ban.BannedAt, &ban.ExpiresAt, &ban.IsActive,
     )
     if err != nil {
         if err == pgx.ErrNoRows {
@@ -72,7 +73,7 @@ func (r *BanRepository) FindActiveByUserID(ctx context.Context, userID int) (*mo
     return &ban, nil
 }
 
-// Deactivate - деактивация блокировки (разблокировка)
+// Deactivate - деактивация блокировки
 func (r *BanRepository) Deactivate(ctx context.Context, userID int) error {
     query := `
         UPDATE bans
@@ -95,7 +96,8 @@ func (r *BanRepository) Deactivate(ctx context.Context, userID int) error {
 // ListActive - список активных блокировок
 func (r *BanRepository) ListActive(ctx context.Context, limit, offset int) ([]*models.BanResponse, error) {
     query := `
-        SELECT b.id, b.user_id, u.username, b.moderator_id, m.username, b.reason, b.banned_at, b.expires_at, b.is_active
+        SELECT b.id, b.user_id, u.username, b.moderator_id, m.username, 
+               b.ban_type, b.reason, b.comment, b.banned_at, b.expires_at, b.is_active
         FROM bans b
         LEFT JOIN users u ON b.user_id = u.id
         LEFT JOIN users m ON b.moderator_id = m.id
@@ -115,17 +117,63 @@ func (r *BanRepository) ListActive(ctx context.Context, limit, offset int) ([]*m
     for rows.Next() {
         var ban models.BanResponse
         var expiresAt *time.Time
+        var banType string
         err := rows.Scan(
             &ban.ID, &ban.UserID, &ban.Username,
             &ban.ModeratorID, &ban.ModeratorName,
-            &ban.Reason, &ban.BannedAt, &expiresAt, &ban.IsActive,
+            &banType, &ban.Reason, &ban.Comment,
+            &ban.BannedAt, &expiresAt, &ban.IsActive,
         )
         if err != nil {
             return nil, fmt.Errorf("failed to scan ban: %w", err)
         }
+        ban.BanType = models.BanType(banType)
+        ban.BanTypeLabel = models.BanType(banType).Label()
         ban.ExpiresAt = expiresAt
         bans = append(bans, &ban)
     }
 
     return bans, nil
+}
+// IsUserBanned - проверка, заблокирован ли пользователь с определённым типом
+func (r *BanRepository) IsUserBanned(ctx context.Context, userID int, banType models.BanType) (bool, error) {
+    query := `
+        SELECT EXISTS(
+            SELECT 1 FROM bans
+            WHERE user_id = $1 
+              AND is_active = TRUE 
+              AND ban_type = $2
+              AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        )
+    `
+    var exists bool
+    err := r.db.Pool.QueryRow(ctx, query, userID, banType).Scan(&exists)
+    if err != nil {
+        return false, fmt.Errorf("failed to check ban: %w", err)
+    }
+    return exists, nil
+}
+
+// GetActiveBanByUser - получить активную блокировку пользователя (с типом)
+func (r *BanRepository) GetActiveBanByUser(ctx context.Context, userID int) (*models.Ban, error) {
+    query := `
+        SELECT id, user_id, moderator_id, ban_type, reason, comment, banned_at, expires_at, is_active
+        FROM bans
+        WHERE user_id = $1 AND is_active = TRUE
+          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+        LIMIT 1
+    `
+
+    var ban models.Ban
+    err := r.db.Pool.QueryRow(ctx, query, userID).Scan(
+        &ban.ID, &ban.UserID, &ban.ModeratorID, &ban.BanType,
+        &ban.Reason, &ban.Comment, &ban.BannedAt, &ban.ExpiresAt, &ban.IsActive,
+    )
+    if err != nil {
+        if err == pgx.ErrNoRows {
+            return nil, nil
+        }
+        return nil, fmt.Errorf("failed to get active ban: %w", err)
+    }
+    return &ban, nil
 }
