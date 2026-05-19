@@ -3,7 +3,9 @@ package repository
 import (
     "context"
     "fmt"
+    "strings"
     "time"
+
     "esports-manager/internal/db"
     "esports-manager/internal/models"
 
@@ -135,23 +137,48 @@ func (r *BanRepository) ListActive(ctx context.Context, limit, offset int) ([]*m
 
     return bans, nil
 }
+func isMissingColumnErr(err error, column string) bool {
+    if err == nil {
+        return false
+    }
+    msg := strings.ToLower(err.Error())
+    return strings.Contains(msg, strings.ToLower(column)) &&
+        (strings.Contains(msg, "does not exist") || strings.Contains(msg, "не существует") || strings.Contains(msg, "42703"))
+}
+
 // IsUserBanned - проверка, заблокирован ли пользователь с определённым типом
 func (r *BanRepository) IsUserBanned(ctx context.Context, userID int, banType models.BanType) (bool, error) {
-    query := `
+    queryTyped := `
         SELECT EXISTS(
             SELECT 1 FROM bans
-            WHERE user_id = $1 
-              AND is_active = TRUE 
+            WHERE user_id = $1
+              AND is_active = TRUE
               AND ban_type = $2
               AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
         )
     `
     var exists bool
-    err := r.db.Pool.QueryRow(ctx, query, userID, banType).Scan(&exists)
-    if err != nil {
-        return false, fmt.Errorf("failed to check ban: %w", err)
+    err := r.db.Pool.QueryRow(ctx, queryTyped, userID, string(banType)).Scan(&exists)
+    if err == nil {
+        return exists, nil
     }
-    return exists, nil
+    // Старая схема без ban_type (см. migrations/001_bans_ban_type.sql)
+    if isMissingColumnErr(err, "ban_type") {
+        queryLegacy := `
+            SELECT EXISTS(
+                SELECT 1 FROM bans
+                WHERE user_id = $1
+                  AND is_active = TRUE
+                  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+            )
+        `
+        err = r.db.Pool.QueryRow(ctx, queryLegacy, userID).Scan(&exists)
+        if err != nil {
+            return false, fmt.Errorf("failed to check ban (legacy): %w", err)
+        }
+        return exists, nil
+    }
+    return false, fmt.Errorf("failed to check ban: %w", err)
 }
 
 // GetActiveBanByUser - получить активную блокировку пользователя (с типом)

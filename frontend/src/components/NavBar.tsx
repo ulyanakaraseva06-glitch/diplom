@@ -22,6 +22,7 @@ import EmojiEvents from '@mui/icons-material/EmojiEvents';
 import Computer from '@mui/icons-material/Computer';
 import AccountBalanceWallet from '@mui/icons-material/AccountBalanceWallet';
 import Login from '@mui/icons-material/Login';
+import Home from '@mui/icons-material/Home';
 
 import { mediaUrl } from '../utils/media';
 
@@ -91,14 +92,24 @@ const NavBar: React.FC = () => {
         {showAuth && (
           <>
             {!isManager && (
-              <Button
-                color="inherit"
-                startIcon={<EmojiEvents />}
-                onClick={() => navigate('/client/all-tournaments')}
-                sx={{ mr: 1 }}
-              >
-                Турниры
-              </Button>
+              <>
+                <Button
+                  color="inherit"
+                  startIcon={<Home />}
+                  onClick={() => navigate('/client/tournaments')}
+                  sx={{ mr: 1 }}
+                >
+                  Главный экран
+                </Button>
+                <Button
+                  color="inherit"
+                  startIcon={<EmojiEvents />}
+                  onClick={() => navigate('/client/all-tournaments')}
+                  sx={{ mr: 1 }}
+                >
+                  Турниры
+                </Button>
+              </>
             )}
             {isClientUser && (
               <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/messenger')} sx={{ mr: 1 }}>

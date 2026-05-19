@@ -29,6 +29,10 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
+    "sync-models": "node scripts/sync-hero-models.js",
+    "fix-models": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/move-hero-images.ps1",
+    "prestart": "node scripts/sync-hero-models.js",
+    "prebuild": "node scripts/sync-hero-models.js",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",

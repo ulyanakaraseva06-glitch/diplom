@@ -24,8 +24,12 @@ import {
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import NavBar from '../components/NavBar';
+import LunoxSpinFigure from '../components/LunoxSpinFigure';
 import RegisterTournamentDialog from '../components/RegisterTournamentDialog';
+import TournamentRegistrationActions from '../components/TournamentRegistrationActions';
 import DiamondIcon from '@mui/icons-material/Diamond';
+import { clientApi, MyRegistration } from '../api/clientApi';
+import { myRegForTournament } from '../utils/tournamentHelpers';
 
 const API = 'http://localhost:8080';
 const NEWS_PLACEHOLDER =
@@ -103,6 +107,20 @@ const ClientTournaments: React.FC = () => {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<Tournament | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [myRegs, setMyRegs] = useState<MyRegistration[]>([]);
+
+  const loadMyRegs = async () => {
+    if (!isAuthenticated || !isClientUser) {
+      setMyRegs([]);
+      return;
+    }
+    try {
+      const regs = await clientApi.getMyRegistrations();
+      setMyRegs(regs);
+    } catch {
+      setMyRegs([]);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +177,10 @@ const ClientTournaments: React.FC = () => {
   }, [showNews]);
 
   useEffect(() => {
+    loadMyRegs();
+  }, [isAuthenticated, isClientUser]);
+
+  useEffect(() => {
     const state = location.state as { scrollToTournaments?: boolean } | null;
     const shouldScroll =
       state?.scrollToTournaments || window.location.hash === '#tournaments';
@@ -170,16 +192,27 @@ const ClientTournaments: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [tournamentsLoading, location]);
 
-  const openRegister = () => {
+  const openRegister = (t?: Tournament) => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
+    if (t) setSelected(t);
     setRegisterOpen(true);
+  };
+
+  const cancelReg = async (regId: number) => {
+    try {
+      await clientApi.cancelRegistration(regId);
+      await loadMyRegs();
+    } catch {
+      alert('Не удалось отменить заявку');
+    }
   };
 
   const canRegister = isClientUser;
   const displayTournaments = staffHome ? tournaments : tournaments.slice(0, 5);
+  const selectedReg = selected ? myRegForTournament(myRegs, selected.id) : undefined;
 
   return (
     <>
@@ -306,8 +339,34 @@ const ClientTournaments: React.FC = () => {
           </Alert>
         )}
 
-        <Grid container spacing={3} ref={tournamentsRef} id="tournaments-section" sx={{ mt: staffHome ? 3 : 0 }}>
-          {!staffHome && <Grid size={{ xs: 0, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />}
+        <Grid
+          container
+          spacing={3}
+          ref={tournamentsRef}
+          id="tournaments-section"
+          sx={{
+            mt: staffHome ? 3 : 0,
+            alignItems: 'flex-start',
+            position: 'relative',
+          }}
+        >
+          {!staffHome && (
+            <Grid
+              size={{ xs: 0, md: 4 }}
+              sx={{
+                display: { xs: 'none', md: 'block' },
+                position: 'sticky',
+                top: { md: 100 },
+                alignSelf: 'flex-start',
+                width: '100%',
+                height: { md: 'calc(100vh - 120px)' },
+                maxHeight: { md: 'calc(100vh - 120px)' },
+                zIndex: 1,
+              }}
+            >
+              <LunoxSpinFigure />
+            </Grid>
+          )}
           <Grid size={{ xs: 12, md: staffHome ? 12 : 8 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
               <Typography
@@ -397,10 +456,19 @@ const ClientTournaments: React.FC = () => {
                           Взнос: {formatMoney(tournament.entry_fee)}
                         </Typography>
                       )}
-                      <Box sx={{ mt: 'auto', pt: 2 }}>
+                      <Box sx={{ mt: 'auto', pt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                         <Button variant="contained" onClick={() => setSelected(tournament)}>
                           Подробнее
                         </Button>
+                        {isClientUser && (
+                          <TournamentRegistrationActions
+                            tournamentId={tournament.id}
+                            myRegs={myRegs}
+                            canRegister={canRegister}
+                            onRegister={() => openRegister(tournament)}
+                            onCancelReg={cancelReg}
+                          />
+                        )}
                       </Box>
                     </Box>
                   </Card>
@@ -461,12 +529,25 @@ const ClientTournaments: React.FC = () => {
               )}
             </DialogContent>
             <DialogActions sx={{ px: 3, py: 2, flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
-              {canRegister ? (
+              {selectedReg ? (
+                <TournamentRegistrationActions
+                  tournamentId={selected.id}
+                  myRegs={myRegs}
+                  canRegister={false}
+                  onRegister={() => {}}
+                  onCancelReg={async (id) => {
+                    await cancelReg(id);
+                    setSelected(null);
+                  }}
+                  size="medium"
+                  showRegisterButton={false}
+                />
+              ) : canRegister ? (
                 <Button
                   variant="contained"
                   size="large"
                   fullWidth
-                  onClick={openRegister}
+                  onClick={() => openRegister()}
                   sx={{
                     background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
                   }}
@@ -493,9 +574,9 @@ const ClientTournaments: React.FC = () => {
         tournamentId={selected?.id ?? null}
         isVip={!!selected?.is_vip}
         onClose={() => setRegisterOpen(false)}
-        onSuccess={() => {
-          setSelected(null);
-          alert('Заявка отправлена! Ожидайте подтверждения организатора.');
+        onSuccess={async () => {
+          await loadMyRegs();
+          setRegisterOpen(false);
         }}
       />
     </>

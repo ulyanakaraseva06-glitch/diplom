@@ -1,0 +1,38 @@
+[
+  {
+    "id": "juggernaut",
+    "name": "Juggernaut",
+    "file": "Juggernaut.PNG",
+    "tagline": "MLBB"
+  },
+  {
+    "id": "lunox",
+    "name": "Lunox",
+    "file": "Lunox.png",
+    "tagline": "MLBB"
+  },
+  {
+    "id": "pubg-fone",
+    "name": "Pubg_fone",
+    "file": "Pubg_fone.PNG",
+    "tagline": "MLBB"
+  },
+  {
+    "id": "pubg",
+    "name": "Pubg",
+    "file": "Pubg.PNG",
+    "tagline": "MLBB"
+  },
+  {
+    "id": "pudge",
+    "name": "pudge",
+    "file": "pudge.PNG",
+    "tagline": "MLBB"
+  },
+  {
+    "id": "zhuxin",
+    "name": "Zhuxin",
+    "file": "Zhuxin.PNG",
+    "tagline": "MLBB"
+  }
+]

@@ -2,6 +2,7 @@ package repository
 
 import (
     "context"
+    "errors"
     "fmt"
     "time"
 
@@ -67,7 +68,7 @@ func (r *RegistrationRepository) FindByID(ctx context.Context, id int) (*models.
         &registration.RegisteredAt, &registration.ApprovedBy, &registration.ApprovedAt,
     )
     if err != nil {
-        if err == pgx.ErrNoRows {
+        if errors.Is(err, pgx.ErrNoRows) {
             return nil, nil
         }
         return nil, fmt.Errorf("failed to find registration: %w", err)
@@ -91,7 +92,7 @@ func (r *RegistrationRepository) FindByTournamentAndUser(ctx context.Context, to
         &registration.RegisteredAt, &registration.ApprovedBy, &registration.ApprovedAt,
     )
     if err != nil {
-        if err == pgx.ErrNoRows {
+        if errors.Is(err, pgx.ErrNoRows) {
             return nil, nil
         }
         return nil, fmt.Errorf("failed to find registration: %w", err)
@@ -191,6 +192,16 @@ func (r *RegistrationRepository) UpdatePaymentStatus(ctx context.Context, id int
     }
 
     return nil
+}
+
+// CountAll — всего заявок на турниры (для дашборда)
+func (r *RegistrationRepository) CountAll(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM tournament_registrations`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count registrations: %w", err)
+	}
+	return count, nil
 }
 
 // CountByTournament - количество заявок на турнир
@@ -332,13 +343,4 @@ func (r *RegistrationRepository) ListApplications(ctx context.Context, organizer
         out = append(out, a)
     }
     return out, nil
-}
-// CountAll - общее количество заявок
-func (r *RegistrationRepository) CountAll(ctx context.Context) (int, error) {
-    var count int
-    err := r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM tournament_registrations`).Scan(&count)
-    if err != nil {
-        return 0, fmt.Errorf("failed to count registrations: %w", err)
-    }
-    return count, nil
 }
