@@ -135,6 +135,8 @@ const Tournaments: React.FC = () => {
           t.title.toLowerCase().includes(searchTitle.toLowerCase())
         );
       }
+
+       filtered.sort((b, a) => b.id - a.id);
       
       setTournaments(filtered);
       setError('');
