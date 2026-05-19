@@ -1,19 +1,22 @@
 package main
 
 import (
-    "context"
-    "log"
-    "net/http"
+	"context"
+	"log"
+	"net/http"
+	"path/filepath"
 
-    "esports-manager/internal/config"
-    "esports-manager/internal/db"
-    "esports-manager/internal/handlers"
-    "esports-manager/internal/middleware"
-    "esports-manager/internal/mongo"
-    "esports-manager/internal/repository"
-    "esports-manager/internal/services"
+	"esports-manager/internal/config"
+	"esports-manager/internal/db"
+	"esports-manager/internal/handlers"
+	"esports-manager/internal/middleware"
+	"esports-manager/internal/mongo"
+	"esports-manager/internal/repository"
+	"esports-manager/internal/services"
+	"esports-manager/internal/utils"
 
-    "github.com/gorilla/mux"
+	"github.com/gorilla/mux"
+	mongodriver "go.mongodb.org/mongo-driver/mongo"
 )
 
 func main() {
@@ -35,40 +38,48 @@ func main() {
     supportRepo := repository.NewSupportRepository(database)
     bracketRepo := repository.NewBracketRepository(database)
 
-    // Подключение к MongoDB
-    mongoClient, err := mongo.NewMongoClient(cfg.MongoURI, cfg.MongoDBName)
-    if err != nil {
-        log.Fatalf("Failed to connect to MongoDB: %v", err)
+    // MongoDB — опционально (турниры на клиенте читаются из PostgreSQL)
+    var syncService *services.SyncService
+    var mongoClient *mongo.MongoClient
+    mc, mongoErr := mongo.NewMongoClient(cfg.MongoURI, cfg.MongoDBName)
+    if mongoErr != nil {
+        log.Printf("Warning: MongoDB unavailable: %v", mongoErr)
+    } else {
+        mongoClient = mc
+        defer mongoClient.Close()
+        syncService = services.NewSyncService(userRepo, tournamentRepo, mongoClient.Database)
+        if err := syncService.SyncAll(context.Background()); err != nil {
+            log.Printf("Warning: sync failed: %v", err)
+        }
+        subService := services.NewSubscriptionService(mongoClient.Database)
+        if err := subService.InitSubscriptions(context.Background()); err != nil {
+            log.Printf("Warning: subscription init failed: %v", err)
+        }
     }
-    defer mongoClient.Close()
 
-    // Синхронизация данных из PostgreSQL в MongoDB
-    syncService := services.NewSyncService(userRepo, tournamentRepo, mongoClient.Database)
-    if err := syncService.SyncAll(context.Background()); err != nil {
-        log.Printf("Warning: sync failed: %v", err)
+    var mongoDatabase *mongodriver.Database
+    if mongoClient != nil {
+        mongoDatabase = mongoClient.Database
     }
-
-    // Инициализация подписок
-    subService := services.NewSubscriptionService(mongoClient.Database)
-    if err := subService.InitSubscriptions(context.Background()); err != nil {
-    log.Printf("Warning: subscription init failed: %v", err)
-    }
-
 
     // Инициализация хендлеров
-    authHandler := handlers.NewAuthHandler(userRepo, syncService, cfg.JWTSecret)
+    authHandler := handlers.NewAuthHandler(userRepo, syncService, mongoDatabase, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
     banHandler := handlers.NewBanHandler(banRepo, userRepo)
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-    clientHandler := handlers.NewClientHandler(mongoClient.Database)
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo)
+    uploadHandler := handlers.NewUploadHandler()
 
     // Создание роутера
     r := mux.NewRouter()
 
     // Добавляем CORS middleware для всех маршрутов
     r.Use(middleware.CORS)
+
+    uploadsPath := filepath.Join(utils.GetProjectRoot(), "uploads")
+    r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
 
     // Публичные маршруты (не требуют авторизации)
     r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
@@ -82,20 +93,41 @@ func main() {
     r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
     // Клиентские маршруты (публичные)
     r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
+    r.HandleFunc("/api/client/news", handlers.GetCybersportNews).Methods("GET", "OPTIONS")
     // Защищенные маршруты (требуют авторизации)
     api := r.PathPrefix("/api").Subrouter()
     api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
 
-    // Маршруты для клиентского модуля (друзья)
+    // Друзья
     api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/list", clientHandler.GetFriendsDetailed).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/requests", clientHandler.GetFriendRequests).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/friends/add", clientHandler.AddFriend).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/request", clientHandler.SendFriendRequest).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/respond", clientHandler.RespondFriendRequest).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
+
+    // Мессенджер
+    api.HandleFunc("/client/chats", clientHandler.ListChats).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/chats/{peer_id:[0-9]+}/messages", clientHandler.GetChatMessages).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/chats/{peer_id:[0-9]+}/messages", clientHandler.SendChatMessage).Methods("POST", "OPTIONS")
+
+    // Кошелёк
+    api.HandleFunc("/client/wallet", clientHandler.GetWallet).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/wallet/deposit", clientHandler.DepositWallet).Methods("POST", "OPTIONS")
+    api.HandleFunc("/subscriptions/pay", clientHandler.SubscribeWithBalance).Methods("POST", "OPTIONS")
+
+    // Загрузка файлов
+    api.HandleFunc("/client/upload", uploadHandler.UploadImage).Methods("POST", "OPTIONS")
 
     // Маршруты для клиентского модуля (требуют авторизации)
     api.HandleFunc("/client/register", clientHandler.RegisterForTournament).Methods("POST", "OPTIONS")
 
     // Клиентские маршруты для профиля
     api.HandleFunc("/client/profile", clientHandler.GetProfile).Methods("GET", "OPTIONS")
-    api.HandleFunc("/client/profile", clientHandler.UpdateProfile).Methods("PUT", "OPTIONS")
+    api.HandleFunc("/client/profile/game-cards", clientHandler.UpdateProfileGameCards).Methods("PUT", "OPTIONS")
+    api.HandleFunc("/client/profile/avatar", clientHandler.UpdateProfileAvatar).Methods("PUT", "OPTIONS")
     api.HandleFunc("/auth/me", authHandler.GetMe).Methods("GET", "OPTIONS")
     api.HandleFunc("/auth/update", authHandler.UpdateUser).Methods("PUT", "OPTIONS")
 

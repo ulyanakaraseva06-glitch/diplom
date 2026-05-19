@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -9,172 +7,212 @@ import {
   TextField,
   Button,
   List,
-  ListItem,
-  ListItemText,
+  ListItemButton,
   ListItemAvatar,
+  ListItemText,
   Avatar,
   Divider,
+  IconButton,
+  CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import PersonIcon from '@mui/icons-material/Person';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import NavBar from '../components/NavBar';
-
-interface ChatMessage {
-  id: number;
-  text: string;
-  fromMe: boolean;
-  time: string;
-  userId?: number;
-}
-
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-}
+import EmojiPicker from '../components/EmojiPicker';
+import { clientApi, ChatPreview, ChatMessage } from '../api/clientApi';
 
 const Messenger: React.FC = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [message, setMessage] = useState('');
+  const [chats, setChats] = useState<ChatPreview[]>([]);
+  const [chatSearch, setChatSearch] = useState('');
+  const [selected, setSelected] = useState<ChatPreview | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const loadChats = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8080/api/admin/users', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const allUsers = await response.json();
-      const filteredUsers = allUsers.filter((u: User) => u.role === 'user' && u.id !== user?.id);
-      setUsers(filteredUsers);
-    } catch (err) {
-      console.error('Ошибка загрузки пользователей', err);
+      const list = await clientApi.getChats(chatSearch);
+      setChats(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const loadMessages = async (userId: number) => {
+  useEffect(() => {
+    loadChats();
+  }, [chatSearch]);
+
+  const loadMessages = async (chat: ChatPreview) => {
     setLoading(true);
     try {
-      const storageKey = `chat_${user?.id}_${userId}`;
-      const savedMessages = localStorage.getItem(storageKey);
-      if (savedMessages) {
-        setMessages(JSON.parse(savedMessages));
-      } else {
-        setMessages([]);
-      }
-    } catch (err) {
-      console.error('Ошибка загрузки сообщений', err);
+      const msgs = await clientApi.getMessages(chat.id);
+      setMessages(Array.isArray(msgs) ? msgs : []);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (e) {
+      console.error(e);
+      setMessages([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectUser = (selected: User) => {
-    setSelectedUser(selected);
-    loadMessages(selected.id);
+  const handleSelect = (chat: ChatPreview) => {
+    setSelected(chat);
+    loadMessages(chat);
   };
 
-  const handleSendMessage = () => {
-    if (!message.trim() || !selectedUser) return;
-    
-    const newMessage: ChatMessage = {
-      id: messages.length + 1,
-      text: message,
-      fromMe: true,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      userId: selectedUser.id,
-    };
-    
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-    
-    const storageKey = `chat_${user?.id}_${selectedUser.id}`;
-    localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
-    setMessage('');
+  const handleSend = async (imageUrl?: string) => {
+    if (!selected || (!text.trim() && !imageUrl)) return;
+    setSending(true);
+    try {
+      const msg = await clientApi.sendMessage(selected.id, text.trim(), imageUrl);
+      setMessages((prev) => [...prev, msg]);
+      setText('');
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+      alert('Не удалось отправить сообщение');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await clientApi.uploadImage(file);
+      await handleSend(url);
+    } catch {
+      alert('Ошибка загрузки фото');
+    }
+    e.target.value = '';
   };
 
   return (
     <>
       <NavBar />
       <Container maxWidth="xl">
-        <Box sx={{ mt: 4 }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/client/tournaments')} sx={{ mb: 2 }}>
-            Назад к турнирам
-          </Button>
-          
-          <Paper sx={{ height: 600, display: 'flex' }}>
-            {/* Список пользователей */}
-            <Box sx={{ width: 300, borderRight: 1, borderColor: 'divider', overflow: 'auto' }}>
-              <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                Пользователи
-              </Typography>
-              <List>
-                {users.map((u) => (
-                  <ListItem
-                    key={u.id}
-                    component="button"
-                    onClick={() => handleSelectUser(u)}
-                    sx={{
-                      cursor: 'pointer',
-                      bgcolor: selectedUser?.id === u.id ? 'action.selected' : 'transparent',
-                    }}
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="h5" gutterBottom>
+            Мессенджер
+          </Typography>
+          <Paper sx={{ height: 620, display: 'flex' }}>
+            <Box sx={{ width: 300, borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+                <Tooltip title="Поиск по никнейму">
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Поиск чата..."
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                  />
+                </Tooltip>
+              </Box>
+              <List sx={{ overflow: 'auto', flex: 1 }}>
+                {(chats ?? []).map((c) => (
+                  <ListItemButton
+                    key={c.id}
+                    selected={selected?.id === c.id}
+                    onClick={() => handleSelect(c)}
                   >
                     <ListItemAvatar>
-                      <Avatar><PersonIcon /></Avatar>
+                      <Avatar src={c.avatar_url || undefined}>
+                        {c.is_support ? <SupportAgentIcon /> : <PersonIcon />}
+                      </Avatar>
                     </ListItemAvatar>
-                    <ListItemText primary={u.username} secondary={u.email} />
-                  </ListItem>
+                    <ListItemText
+                      primary={c.username}
+                      secondary={c.is_support ? 'Служба поддержки' : 'Игрок'}
+                    />
+                  </ListItemButton>
                 ))}
               </List>
             </Box>
-            
-            {/* Область чата */}
+
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              {!selectedUser ? (
-                <Box display="flex" justifyContent="center" alignItems="center" sx={{ height: '100%' }}>
-                  <Typography color="text.secondary">Выберите пользователя для начала чата</Typography>
+              {!selected ? (
+                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography color="text.secondary">Выберите чат слева</Typography>
                 </Box>
               ) : (
                 <>
-                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#f5f5f5' }}>
-                    <Typography variant="h6">Чат с {selectedUser.username}</Typography>
+                  <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}>
+                    <Typography variant="h6">{selected.username}</Typography>
+                    {selected.is_support && (
+                      <Typography variant="caption" color="text.secondary">
+                        Сообщения видны менеджеру в панели поддержки
+                      </Typography>
+                    )}
                   </Box>
-                  
+
                   <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                    {messages.map((msg) => (
-                      <Box key={msg.id} sx={{ display: 'flex', justifyContent: msg.fromMe ? 'flex-end' : 'flex-start', mb: 1 }}>
-                        <Paper sx={{ p: 1, bgcolor: msg.fromMe ? 'primary.main' : 'grey.100', color: msg.fromMe ? 'white' : 'text.primary' }}>
-                          <Typography variant="body2">{msg.text}</Typography>
-                          <Typography variant="caption" color={msg.fromMe ? 'grey.200' : 'text.secondary'}>
-                            {msg.time}
-                          </Typography>
-                        </Paper>
-                      </Box>
-                    ))}
+                    {loading ? (
+                      <CircularProgress size={32} />
+                    ) : (
+                      (messages ?? []).map((msg) => (
+                        <Box
+                          key={String(msg.id)}
+                          sx={{ display: 'flex', justifyContent: msg.from_me ? 'flex-end' : 'flex-start', mb: 1.5 }}
+                        >
+                          <Paper
+                            sx={{
+                              p: 1.5,
+                              maxWidth: '70%',
+                              bgcolor: msg.from_me ? 'primary.main' : 'grey.100',
+                              color: msg.from_me ? 'primary.contrastText' : 'text.primary',
+                            }}
+                          >
+                            {msg.text && <Typography variant="body2">{msg.text}</Typography>}
+                            {msg.image_url && (
+                              <Box
+                                component="img"
+                                src={msg.image_url}
+                                alt="вложение"
+                                sx={{ maxWidth: '100%', borderRadius: 1, mt: msg.text ? 1 : 0 }}
+                              />
+                            )}
+                            <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </Typography>
+                          </Paper>
+                        </Box>
+                      ))
+                    )}
+                    <div ref={bottomRef} />
                   </Box>
-                  
+
                   <Divider />
-                  
-                  <Box sx={{ p: 2, display: 'flex', gap: 1 }}>
+                  <Box sx={{ p: 2, display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+                    <input type="file" accept="image/*" hidden ref={fileRef} onChange={handleFile} />
+                    <Tooltip title="Прикрепить фото">
+                      <IconButton onClick={() => fileRef.current?.click()}>
+                        <AttachFileIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <EmojiPicker onPick={(e) => setText((t) => t + e)} />
                     <TextField
                       fullWidth
-                      placeholder="Введите сообщение..."
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                       size="small"
+                      multiline
+                      maxRows={4}
+                      placeholder="Сообщение..."
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSend();
+                        }
+                      }}
                     />
-                    <Button variant="contained" onClick={handleSendMessage} disabled={!message.trim()}>
+                    <Button variant="contained" onClick={() => handleSend()} disabled={sending || !text.trim()}>
                       <SendIcon />
                     </Button>
                   </Box>

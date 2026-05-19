@@ -75,6 +75,43 @@ func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.To
     return &tournament, nil
 }
 
+// ListForClient — турниры для клиентской витрины (из PostgreSQL)
+func (r *TournamentRepository) ListForClient(ctx context.Context) ([]*models.Tournament, error) {
+	query := `
+        SELECT id, title, game, COALESCE(description, ''), start_date, registration_deadline,
+               entry_fee, prize_pool, max_teams, status, organizer_id, COALESCE(banner_url, ''), created_at, updated_at
+        FROM tournaments
+        WHERE status IN ('approved', 'ongoing', 'pending')
+        ORDER BY start_date ASC
+    `
+
+	rows, err := r.db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list client tournaments: %w", err)
+	}
+	defer rows.Close()
+
+	var tournaments []*models.Tournament
+	for rows.Next() {
+		var t models.Tournament
+		var bannerURL string
+		if err := rows.Scan(
+			&t.ID, &t.Title, &t.Game, &t.Description,
+			&t.StartDate, &t.RegistrationDeadline,
+			&t.EntryFee, &t.PrizePool, &t.MaxTeams,
+			&t.Status, &t.OrganizerID, &bannerURL,
+			&t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan tournament: %w", err)
+		}
+		if bannerURL != "" {
+			t.BannerURL = &bannerURL
+		}
+		tournaments = append(tournaments, &t)
+	}
+	return tournaments, nil
+}
+
 // List - список турниров с фильтрацией и пагинацией
 func (r *TournamentRepository) List(ctx context.Context, game string, status models.TournamentStatus, limit, offset int) ([]*models.Tournament, error) {
     query := `
@@ -107,6 +144,9 @@ func (r *TournamentRepository) List(ctx context.Context, game string, status mod
         if err != nil {
             return nil, fmt.Errorf("failed to scan tournament: %w", err)
         }
+		if description.Valid {
+			t.Description = description.String
+		}
         tournaments = append(tournaments, &t)
     }
 

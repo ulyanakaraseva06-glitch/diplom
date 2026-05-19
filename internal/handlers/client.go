@@ -1,45 +1,96 @@
 package handlers
 
 import (
-    "encoding/json"
-    "log"
-    "net/http"
-    "time"
-    "fmt"
+	"encoding/json"
+	"fmt"
+	"log"
+	"math"
+	"net/http"
+	"time"
 
-    "esports-manager/internal/middleware"
-    "esports-manager/internal/models"
+	"esports-manager/internal/middleware"
+	"esports-manager/internal/models"
+	"esports-manager/internal/repository"
 
-    "go.mongodb.org/mongo-driver/bson"
-    "go.mongodb.org/mongo-driver/mongo"
-    "go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type ClientHandler struct {
-    mongoDB *mongo.Database
+	mongoDB        *mongo.Database
+	userRepo       *repository.UserRepository
+	supportRepo    *repository.SupportRepository
+	tournamentRepo *repository.TournamentRepository
 }
 
-func NewClientHandler(mongoDB *mongo.Database) *ClientHandler {
-    return &ClientHandler{mongoDB: mongoDB}
+func NewClientHandler(
+	mongoDB *mongo.Database,
+	userRepo *repository.UserRepository,
+	supportRepo *repository.SupportRepository,
+	tournamentRepo *repository.TournamentRepository,
+) *ClientHandler {
+	return &ClientHandler{
+		mongoDB: mongoDB, userRepo: userRepo,
+		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
+	}
 }
 
-// GetTournaments - список турниров из MongoDB
+type clientTournamentView struct {
+	ID                   int     `json:"id"`
+	Title                string  `json:"title"`
+	Game                 string  `json:"game"`
+	MaxTeams             int     `json:"max_teams"`
+	NumberRounds         int     `json:"number_rounds"`
+	WinnerTeam           string  `json:"winner_team"`
+	InfoTournament       string  `json:"info_tournament"`
+	Description          string  `json:"description"`
+	Status               string  `json:"status"`
+	StartDate            string  `json:"start_date"`
+	RegistrationDeadline string  `json:"registration_deadline"`
+	EntryFee             float64 `json:"entry_fee"`
+	PrizePool            float64 `json:"prize_pool"`
+	BannerURL            string  `json:"banner_url"`
+}
+
+// GetTournaments — список турниров из PostgreSQL
 func (h *ClientHandler) GetTournaments(w http.ResponseWriter, r *http.Request) {
-    cursor, err := h.mongoDB.Collection("tournaments").Find(r.Context(), bson.M{})
-    if err != nil {
-        http.Error(w, "Failed to fetch tournaments", http.StatusInternalServerError)
-        return
-    }
-    defer cursor.Close(r.Context())
+	tournaments, err := h.tournamentRepo.ListForClient(r.Context())
+	if err != nil {
+		log.Printf("GetTournaments: %v", err)
+		http.Error(w, "Failed to fetch tournaments: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-    var tournaments []bson.M
-    if err = cursor.All(r.Context(), &tournaments); err != nil {
-        http.Error(w, "Failed to decode tournaments", http.StatusInternalServerError)
-        return
-    }
+	result := make([]clientTournamentView, 0, len(tournaments))
+	for _, t := range tournaments {
+		rounds := 1
+		if t.MaxTeams > 1 {
+			rounds = int(math.Ceil(math.Log2(float64(t.MaxTeams))))
+		}
+		banner := ""
+		if t.BannerURL != nil {
+			banner = *t.BannerURL
+		}
+		result = append(result, clientTournamentView{
+			ID:                   t.ID,
+			Title:                t.Title,
+			Game:                 t.Game,
+			MaxTeams:             t.MaxTeams,
+			NumberRounds:         rounds,
+			WinnerTeam:           "",
+			InfoTournament:       t.Description,
+			Description:          t.Description,
+			Status:               string(t.Status),
+			StartDate:            t.StartDate.Format(time.RFC3339),
+			RegistrationDeadline: t.RegistrationDeadline.Format(time.RFC3339),
+			EntryFee:             t.EntryFee,
+			PrizePool:            t.PrizePool,
+			BannerURL:            banner,
+		})
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(tournaments)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 // GetUserTheme - получение темы пользователя
 func (h *ClientHandler) GetUserTheme(w http.ResponseWriter, r *http.Request) {
@@ -160,90 +211,200 @@ func (h *ClientHandler) RegisterForTournament(w http.ResponseWriter, r *http.Req
     json.NewEncoder(w).Encode(map[string]string{"message": "Registered successfully"})
 }
 
-// GetProfile - получение профиля из MongoDB
-func (h *ClientHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-    log.Println("GetProfile called")
-    
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        log.Println("GetProfile: Unauthorized - no userID in context")
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-    log.Printf("GetProfile: userID = %d", userID)
-
-    var profile models.UserMongo
-    err := h.mongoDB.Collection("users").FindOne(r.Context(), bson.M{"id": userID}).Decode(&profile)
-    if err == mongo.ErrNoDocuments {
-        log.Printf("GetProfile: user %d not found in MongoDB, returning empty", userID)
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "game":         []string{},
-            "rank":         []string{},
-            "achievements": []string{},
-        })
-        return
-    }
-    if err != nil {
-        log.Printf("GetProfile: database error for user %d: %v", userID, err)
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
-
-    log.Printf("GetProfile: returning profile for user %d: %+v", userID, profile)
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(profile)
+func (h *ClientHandler) emptyProfileResponse(userID int) map[string]interface{} {
+	return map[string]interface{}{
+		"id":         userID,
+		"game_cards": []models.GameCard{},
+		"avatar_url": "",
+		"balance":    0,
+	}
 }
 
-// UpdateProfile - обновление профиля в MongoDB
-func (h *ClientHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
+func legacyToGameCards(profile models.UserMongo) []models.GameCard {
+	if len(profile.GameCards) > 0 {
+		return profile.GameCards
+	}
+	maxLen := len(profile.Game)
+	if len(profile.Rank) > maxLen {
+		maxLen = len(profile.Rank)
+	}
+	if len(profile.Achievements) > maxLen {
+		maxLen = len(profile.Achievements)
+	}
+	cards := make([]models.GameCard, 0)
+	for i := 0; i < maxLen; i++ {
+		game := ""
+		if i < len(profile.Game) {
+			game = profile.Game[i]
+		}
+		if game == "" {
+			continue
+		}
+		rank, comment := "", ""
+		if i < len(profile.Rank) {
+			rank = profile.Rank[i]
+		}
+		if i < len(profile.Achievements) {
+			comment = profile.Achievements[i]
+		}
+		cards = append(cards, models.GameCard{
+			ID: newMongoID(), Game: game, Rank: rank, Comment: comment,
+		})
+	}
+	return cards
+}
 
-    var req struct {
-        Game         []string `json:"game"`
-        Rank         []string `json:"rank"`
-        Achievements []string `json:"achievements"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        log.Printf("UpdateProfile: invalid request body: %v", err)
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
+// GetProfile - получение профиля из MongoDB
+func (h *ClientHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    log.Printf("UpdateProfile: userID=%d, game=%v, rank=%v, achievements=%v", userID, req.Game, req.Rank, req.Achievements)
+	w.Header().Set("Content-Type", "application/json")
 
-    update := bson.M{
-        "$set": bson.M{
-            "game":         req.Game,
-            "rank":         req.Rank,
-            "achievements": req.Achievements,
-        },
-        "$setOnInsert": bson.M{
-            "id":    userID,
-            "theme": "cyber",
-            "game":  []string{},
-            "rank":  []string{},
-        },
-    }
+	profile, err := h.ensureMongoUser(r.Context(), userID)
+	if err != nil {
+		log.Printf("GetProfile: ensureMongoUser failed for %d: %v", userID, err)
+		resp := h.emptyProfileResponse(userID)
+		if user, uerr := h.userRepo.FindByID(r.Context(), userID); uerr == nil && user != nil {
+			resp["email"] = user.Email
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
 
-    _, err := h.mongoDB.Collection("users").UpdateOne(
-        r.Context(),
-        bson.M{"id": userID},
-        update,
-        options.Update().SetUpsert(true),
-    )
-    if err != nil {
-        log.Printf("UpdateProfile: database error: %v", err)
-        http.Error(w, "Failed to update profile", http.StatusInternalServerError)
-        return
-    }
+	profile.GameCards = legacyToGameCards(profile)
+	if profile.GameCards == nil {
+		profile.GameCards = []models.GameCard{}
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{"message": "Profile updated"})
+	email := profile.Email
+	if email == "" {
+		if user, uerr := h.userRepo.FindByID(r.Context(), userID); uerr == nil && user != nil {
+			email = user.Email
+		}
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":         profile.ID,
+		"email":      email,
+		"game_cards": profile.GameCards,
+		"avatar_url": profile.AvatarURL,
+		"balance":    profile.Balance,
+		"theme":      profile.Theme,
+		"mongo_ready": h.mongoDB != nil,
+	})
+}
+
+// UpdateProfileGameCards — сохранение карточек игр в MongoDB
+func (h *ClientHandler) UpdateProfileGameCards(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if h.mongoDB == nil {
+		http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		GameCards []models.GameCard `json:"game_cards"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	for i := range req.GameCards {
+		if req.GameCards[i].Game == "" {
+			http.Error(w, "Game name is required in each card", http.StatusBadRequest)
+			return
+		}
+		if len(req.GameCards[i].Comment) > 500 {
+			http.Error(w, "Comment must be at most 500 characters", http.StatusBadRequest)
+			return
+		}
+		if req.GameCards[i].ID == "" {
+			req.GameCards[i].ID = newMongoID()
+		}
+	}
+
+	if _, err := h.ensureMongoUser(r.Context(), userID); err != nil {
+		log.Printf("UpdateProfileGameCards: ensureMongoUser %d: %v", userID, err)
+		http.Error(w, "Failed to prepare profile", http.StatusInternalServerError)
+		return
+	}
+
+	setFields := bson.M{
+		"id":         userID,
+		"game_cards": req.GameCards,
+	}
+	if pgUser, err := h.userRepo.FindByID(r.Context(), userID); err == nil && pgUser != nil {
+		setFields["email"] = pgUser.Email
+	}
+
+	_, err := h.mongoDB.Collection("users").UpdateOne(
+		r.Context(),
+		bson.M{"id": userID},
+		bson.M{"$set": setFields},
+	)
+	if err != nil {
+		log.Printf("UpdateProfileGameCards: update %d: %v", userID, err)
+		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"game_cards": req.GameCards})
+}
+
+// UpdateProfileAvatar — URL аватара в MongoDB
+func (h *ClientHandler) UpdateProfileAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if h.mongoDB == nil {
+		http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.ensureMongoUser(r.Context(), userID); err != nil {
+		log.Printf("UpdateProfileAvatar: ensureMongoUser %d: %v", userID, err)
+		http.Error(w, "Failed to prepare profile", http.StatusInternalServerError)
+		return
+	}
+
+	setFields := bson.M{"avatar_url": req.AvatarURL, "id": userID}
+	if pgUser, err := h.userRepo.FindByID(r.Context(), userID); err == nil && pgUser != nil {
+		setFields["email"] = pgUser.Email
+	}
+
+	_, err := h.mongoDB.Collection("users").UpdateOne(
+		r.Context(),
+		bson.M{"id": userID},
+		bson.M{"$set": setFields},
+	)
+	if err != nil {
+		log.Printf("UpdateProfileAvatar: update %d: %v", userID, err)
+		http.Error(w, "Failed to update avatar", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"avatar_url": req.AvatarURL})
 }
 
 // GetFriends - список друзей пользователя
@@ -281,59 +442,9 @@ func (h *ClientHandler) GetFriends(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(friendIDs)
 }
 
-// AddFriend - добавление друга
+// AddFriend — отправка заявки в друзья (совместимость со старым API)
 func (h *ClientHandler) AddFriend(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    var req struct {
-        FriendID int `json:"friend_id"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
-
-    // Проверяем, что не добавляем самого себя
-    if userID == req.FriendID {
-        http.Error(w, "Cannot add yourself as friend", http.StatusBadRequest)
-        return
-    }
-
-    // Проверяем, не добавлен ли уже друг
-    count, err := h.mongoDB.Collection("friends").CountDocuments(r.Context(), bson.M{
-        "user_id":   userID,
-        "friend_id": req.FriendID,
-    })
-    if err != nil {
-        log.Printf("AddFriend: check error: %v", err)
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
-    if count > 0 {
-        http.Error(w, "Already friends", http.StatusConflict)
-        return
-    }
-
-    // Добавляем в MongoDB
-    friendDoc := bson.M{
-        "user_id":    userID,
-        "friend_id":  req.FriendID,
-        "created_at": time.Now(),
-    }
-
-    _, err = h.mongoDB.Collection("friends").InsertOne(r.Context(), friendDoc)
-    if err != nil {
-        log.Printf("AddFriend: insert error: %v", err)
-        http.Error(w, "Failed to add friend", http.StatusInternalServerError)
-        return
-    }
-
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Friend added successfully"})
+	h.SendFriendRequest(w, r)
 }
 
 // GetSubscriptions - список доступных подписок с фильтрацией по роли
@@ -387,13 +498,19 @@ func (h *ClientHandler) GetUserSubscription(w http.ResponseWriter, r *http.Reque
         return
     }
 
+    w.Header().Set("Content-Type", "application/json")
+    if h.mongoDB == nil {
+        w.Write([]byte("null"))
+        return
+    }
+
     var userSub models.UserSubscription
     err := h.mongoDB.Collection("user_subscriptions").FindOne(r.Context(), bson.M{
         "user_id": userID,
         "is_active": true,
     }).Decode(&userSub)
     if err == mongo.ErrNoDocuments {
-        json.NewEncoder(w).Encode(nil)
+        w.Write([]byte("null"))
         return
     }
     if err != nil {

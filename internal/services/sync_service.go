@@ -51,9 +51,8 @@ func (s *SyncService) SyncUser(ctx context.Context, user *models.User) error {
         ID:           user.ID,
         Email:        user.Email,
         PasswordHash: user.PasswordHash,
-        Game:         []string{},
-        Rank:         []string{},
-        Achievements: []string{},
+        GameCards:    []models.GameCard{},
+        Balance:      0,
         Theme:        "cyber",
     }
     _, err = s.mongoUsers.InsertOne(ctx, mongoUser)
@@ -81,10 +80,9 @@ func (s *SyncService) SyncAll(ctx context.Context) error {
                 ID:           u.ID,
                 Email:        u.Email,
                 PasswordHash: u.PasswordHash,
-                Game:         []string{},
-                Rank:         []string{},
-                Achievements: []string{},
-                Theme:        "cyber", // тема по умолчанию
+                GameCards:    []models.GameCard{},
+                Balance:      0,
+                Theme:        "cyber",
             }
             _, err = s.mongoUsers.InsertOne(ctx, mongoUser)
             if err != nil {

@@ -5,6 +5,7 @@ export interface User {
   username: string;
   role: 'user' | 'organizer' | 'manager';
   created_at: string;
+  avatar_url?: string;
 }
 
 // Авторизация
@@ -118,6 +119,7 @@ export interface SupportMessage {
   manager_id?: number;
   manager_name?: string;
   message: string;
+  image_url?: string;
   is_from_user: boolean;
   is_read: boolean;
   created_at: string;

@@ -229,7 +229,14 @@ useEffect(() => {
                             <ListItem key={msg.id} sx={{ justifyContent: msg.is_from_user ? 'flex-start' : 'flex-end' }}>
                               <Paper sx={{ p: 1.5, maxWidth: '70%', bgcolor: msg.is_from_user ? 'grey.100' : 'primary.main', color: msg.is_from_user ? 'text.primary' : 'white', borderRadius: 2 }}>
                                 <ListItemText
-                                  primary={msg.message}
+                                  primary={
+                                    <>
+                                      {msg.message}
+                                      {msg.image_url && (
+                                        <Box component="img" src={msg.image_url} alt="" sx={{ maxWidth: '100%', display: 'block', mt: 1, borderRadius: 1 }} />
+                                      )}
+                                    </>
+                                  }
                                   secondary={`${msg.is_from_user ? (msg.username || 'Пользователь') : (msg.manager_name || 'Менеджер')} • ${new Date(msg.created_at).toLocaleString()}`}
                                   secondaryTypographyProps={{ color: msg.is_from_user ? 'text.secondary' : 'grey.200', fontSize: '0.75rem' }}
                                 />
@@ -294,7 +301,14 @@ useEffect(() => {
                   <ListItem key={msg.id} sx={{ justifyContent: msg.is_from_user ? 'flex-start' : 'flex-end' }}>
                     <Paper sx={{ p: 1.5, maxWidth: '70%', bgcolor: msg.is_from_user ? 'grey.100' : 'primary.main', color: msg.is_from_user ? 'text.primary' : 'white', borderRadius: 2 }}>
                       <ListItemText
-                        primary={msg.message}
+                        primary={
+                          <>
+                            {msg.message}
+                            {msg.image_url && (
+                              <Box component="img" src={msg.image_url} alt="" sx={{ maxWidth: '100%', display: 'block', mt: 1, borderRadius: 1 }} />
+                            )}
+                          </>
+                        }
                         secondary={new Date(msg.created_at).toLocaleString()}
                         secondaryTypographyProps={{ color: msg.is_from_user ? 'text.secondary' : 'grey.200', fontSize: '0.75rem' }}
                       />

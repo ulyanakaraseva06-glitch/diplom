@@ -6,31 +6,35 @@ import {
   Typography,
   Box,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Button,
   CircularProgress,
   Alert,
-  AppBar,
-  Toolbar,
-  Menu,
-  MenuItem,
-  Avatar,
-  Chip
+  Chip,
+  Grid,
+  Card,
+  CardMedia,
+  CardContent,
+  CardActions,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
 } from '@mui/material';
-import LoginIcon from '@mui/icons-material/Login';
-import LogoutIcon from '@mui/icons-material/Logout';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import ChatIcon from '@mui/icons-material/Chat';
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import PeopleIcon from '@mui/icons-material/People';
-import ComputerIcon from '@mui/icons-material/Computer';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import NavBar from '../components/NavBar';
+
+const API = 'http://localhost:8080';
+const NEWS_PLACEHOLDER =
+  'linear-gradient(135deg, rgba(0,212,255,0.25) 0%, rgba(255,0,68,0.2) 100%)';
+
+interface NewsItem {
+  title: string;
+  url: string;
+  image: string;
+  date?: string;
+}
 
 interface Tournament {
   id: number;
@@ -40,38 +44,85 @@ interface Tournament {
   number_rounds: number;
   winner_team: string;
   info_tournament: string;
+  description: string;
+  status: string;
+  start_date: string;
+  registration_deadline: string;
+  entry_fee: number;
+  prize_pool: number;
+  banner_url: string;
 }
 
+const formatMoney = (n: number) =>
+  (n ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽';
+
+const formatDate = (iso: string) => {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+};
+
+const bannerSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return `${API}${url}`;
+};
+
+const statusLabel: Record<string, string> = {
+  approved: 'Открыт',
+  ongoing: 'Идёт',
+  pending: 'Скоро',
+};
+
 const ClientTournaments: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [registering, setRegistering] = useState<number | null>(null);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  
-  // Гость — если нет токена и нет user в localStorage
-  const isGuest = !isAuthenticated && !localStorage.getItem('token');
+  const [selected, setSelected] = useState<Tournament | null>(null);
 
   useEffect(() => {
-    fetchTournaments();
-  }, []);
+    (async () => {
+      try {
+        const [tRes, nRes] = await Promise.all([
+          fetch(`${API}/api/client/tournaments`),
+          fetch(`${API}/api/client/news`),
+        ]);
+        if (!tRes.ok) {
+          const detail = await tRes.text();
+          throw new Error(detail || `HTTP ${tRes.status}`);
+        }
+        const tData = await tRes.json();
+        setTournaments(Array.isArray(tData) ? tData : []);
 
-  const fetchTournaments = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/client/tournaments');
-      if (!response.ok) {
-        throw new Error('Ошибка загрузки');
+        if (nRes.ok) {
+          const nData = await nRes.json();
+          setNews(Array.isArray(nData) ? nData.slice(0, 3) : []);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+          setError('Сервер недоступен. Запустите backend: go run ./cmd/server');
+        } else {
+          setError('Ошибка загрузки' + (msg ? `: ${msg}` : ''));
+        }
+      } finally {
+        setLoading(false);
       }
-      const data = await response.json();
-      setTournaments(data);
-    } catch (err) {
-      setError('Ошибка загрузки турниров');
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+  }, []);
 
   const handleRegister = async (tournamentId: number) => {
     if (!isAuthenticated) {
@@ -82,342 +133,323 @@ const ClientTournaments: React.FC = () => {
     setRegistering(tournamentId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8080/api/client/register', {
+      const response = await fetch(`${API}/api/client/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ tournament_id: tournamentId }),
       });
 
       if (response.ok) {
         alert('Вы успешно зарегистрированы на турнир!');
+        setSelected(null);
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         alert(errorData.message || 'Ошибка регистрации');
       }
-    } catch (err) {
+    } catch {
       alert('Ошибка регистрации');
     } finally {
       setRegistering(null);
     }
   };
 
-  const handleLogout = () => {
-    handleMenuClose();
-    logout();
-    navigate('/client/tournaments');
-  };
-
-  const handleAdminPanel = () => {
-    handleMenuClose();
-    navigate('/dashboard');
-  };
-
-  const handleLogin = () => {
-    navigate('/login');
-  };
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleMessenger = () => {
-    navigate('/messenger');
-  };
-
-  const handleSubscription = () => {
-    navigate('/subscription');
-  };
-
-  const handleFriends = () => {
-    navigate('/friends');
-  };
-
-  const handleProfile = () => {
-    handleMenuClose();
-    navigate('/profile');
-  };
-
-  const handleThemes = () => {
-    handleMenuClose();
-    navigate('/themes');
-  };
-
-  const handleMyTournaments = () => {
-    navigate('/my-tournaments');
-  };
+  const canRegister = user?.role === 'user';
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
-        <CircularProgress />
-      </Box>
+      <>
+        <NavBar />
+        <Box display="flex" justifyContent="center" sx={{ mt: 8 }}>
+          <CircularProgress />
+        </Box>
+      </>
     );
   }
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1, fontFamily: 'Orbitron, monospace', fontWeight: 700, letterSpacing: '0.1em' }}>
-            🎮 КИБЕРСПОРТ ПЛАТФОРМА
-          </Typography>
-          
-          {isGuest ? (
-            <Button color="inherit" startIcon={<LoginIcon />} onClick={handleLogin} sx={{ '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-              Войти
-            </Button>
-          ) : isAuthenticated ? (
-            <>
-              {user?.role === 'manager' ? (
-                // Менеджер: только админ-панель и кнопка выхода
-                <>
-                  <Button 
-                    color="inherit" 
-                    startIcon={<AdminPanelSettingsIcon />} 
-                    onClick={handleAdminPanel} 
-                    sx={{ 
-                      mr: 2,
-                      '&:hover': { 
-                        textShadow: '0 0 5px #ff0044',
-                        backgroundColor: 'rgba(255, 0, 68, 0.1)'
-                      }
-                    }}
-                  >
-                    Админ-панель
-                  </Button>
-                  <Button 
-                    color="inherit" 
-                    onClick={handleLogout} 
-                    sx={{ 
-                      '&:hover': { 
-                        textShadow: '0 0 5px #ff0044',
-                        backgroundColor: 'rgba(255, 0, 68, 0.1)'
-                      }
-                    }}
-                  >
-                    Выйти
-                  </Button>
-                </>
-              ) : user?.role === 'organizer' ? (
-                // Организатор: мессенджер, подписка, мои турниры
-                <>
-                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-                    Мессенджер
-                  </Button>
-                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-                    Подписка
-                  </Button>
-                  <Button 
-                    color="inherit" 
-                    startIcon={<EmojiEventsIcon />} 
-                    onClick={handleMyTournaments} 
-                    sx={{ mr: 2, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}
-                  >
-                    Мои турниры
-                  </Button>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                    <Avatar sx={{ width: 32, height: 32, mr: 1, border: '2px solid #00d4ff' }}>
-                      {user?.username?.[0]?.toUpperCase() || 'U'}
-                    </Avatar>
-                    <Typography variant="body2" sx={{ mr: 1 }}>
-                      {user?.username}
-                    </Typography>
-                  </Box>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleMenuClose}
-                    anchorOrigin={{
-                      vertical: 'bottom',
-                      horizontal: 'right',
-                    }}
-                    transformOrigin={{
-                      vertical: 'top',
-                      horizontal: 'right',
-                    }}
-                  >
-                    <MenuItem onClick={handleProfile}>
-                      <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                    </MenuItem>
-                    <MenuItem onClick={handleThemes}>
-                      <ComputerIcon sx={{ mr: 1 }} /> Темы
-                    </MenuItem>
-                    <MenuItem onClick={handleLogout}>
-                      <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                    </MenuItem>
-                  </Menu>
-                </>
-              ) : (
-                // Обычный пользователь: все кнопки, включая друзей
-                <>
-                  <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-                    Мессенджер
-                  </Button>
-                  <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-                    Подписка
-                  </Button>
-                  <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2, '&:hover': { textShadow: '0 0 5px #00d4ff' } }}>
-                    Друзья
-                  </Button>
-                  
-                  <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                    <Avatar sx={{ width: 32, height: 32, mr: 1, border: '2px solid #00d4ff' }}>
-                      {user?.username?.[0]?.toUpperCase() || 'U'}
-                    </Avatar>
-                    <Typography variant="body2" sx={{ mr: 1 }}>
-                      {user?.username}
-                    </Typography>
-                  </Box>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleMenuClose}
-                    anchorOrigin={{
-                      vertical: 'bottom',
-                      horizontal: 'right',
-                    }}
-                    transformOrigin={{
-                      vertical: 'top',
-                      horizontal: 'right',
-                    }}
-                  >
-                    <MenuItem onClick={handleProfile}>
-                      <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                    </MenuItem>
-                    <MenuItem onClick={handleThemes}>
-                      <ComputerIcon sx={{ mr: 1 }} /> Темы
-                    </MenuItem>
-                    <MenuItem onClick={handleLogout}>
-                      <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                    </MenuItem>
-                  </Menu>
-                </>
-              )}
-            </>
-          ) : null}
-        </Toolbar>
-      </AppBar>
+      <NavBar />
 
-      <Container maxWidth="lg">
-        <Box sx={{ mt: 4 }}>
-          <Typography 
-            variant="h4" 
-            gutterBottom 
-            sx={{ 
-              fontWeight: 800, 
-              letterSpacing: '0.15em', 
-              textTransform: 'uppercase',
+      <Container maxWidth="lg" sx={{ pb: 6 }}>
+        {/* Новости */}
+        <Box sx={{ mt: 3, mb: 4 }}>
+          <Typography
+            variant="overline"
+            sx={{ color: 'primary.main', letterSpacing: '0.2em', fontWeight: 700 }}
+          >
+            Cybersport.ru
+          </Typography>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+              mb: 2,
               background: 'linear-gradient(135deg, #00d4ff 0%, #ff0044 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-              textShadow: '0 0 20px rgba(0, 212, 255, 0.3)',
-              mb: 3
             }}
           >
-            ТУРНИРЫ
+            Главные новости
           </Typography>
 
-          {error && <Alert severity="error" sx={{ mb: 2, bgcolor: 'rgba(255, 0, 68, 0.1)', border: '1px solid #ff0044' }}>{error}</Alert>}
-
-          {(!tournaments || tournaments.length === 0) ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Typography variant="h6" sx={{ color: '#a0a0b0', letterSpacing: '0.05em' }}>
-                НЕТ ДОСТУПНЫХ ТУРНИРОВ
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#a0a0b0', mt: 1 }}>
-                Зайдите позже — турниры скоро появятся
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} sx={{ overflow: 'hidden' }}>
-              <Table>
-                <TableHead>
-                  <TableRow sx={{ backgroundColor: 'rgba(0, 212, 255, 0.08)' }}>
-                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>НАЗВАНИЕ</strong></TableCell>
-                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ИГРА</strong></TableCell>
-                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>МАКС. КОМАНД</strong></TableCell>
-                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>РАУНДОВ</strong></TableCell>
-                    <TableCell sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ДОП. ИНФОРМАЦИЯ</strong></TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 700, letterSpacing: '0.05em', borderBottom: '2px solid #00d4ff' }}><strong>ДЕЙСТВИЕ</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {tournaments.map((tournament) => (
-                    <TableRow 
-                      key={tournament.id} 
-                      hover 
-                      sx={{ 
-                        '&:hover': { 
-                          backgroundColor: 'rgba(0, 212, 255, 0.05)',
-                          transition: 'all 0.2s'
-                        } 
-                      }}
+          <Grid container spacing={2}>
+            {(news.length ? news : []).map((item, i) => (
+              <Grid key={item.url + i} size={{ xs: 12, md: 4 }}>
+                <Card
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 8px 32px rgba(0, 212, 255, 0.15)',
+                      borderColor: 'primary.main',
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: 180,
+                      overflow: 'hidden',
+                      bgcolor: 'rgba(0, 212, 255, 0.08)',
+                      background: item.image ? undefined : NEWS_PLACEHOLDER,
+                    }}
+                  >
+                    {item.image && (
+                      <Box
+                        component="img"
+                        src={item.image}
+                        alt={item.title}
+                        referrerPolicy="no-referrer"
+                        sx={{
+                          width: '100%',
+                          height: 180,
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                        onError={(e) => {
+                          const el = e.target as HTMLImageElement;
+                          el.style.display = 'none';
+                          if (el.parentElement) {
+                            el.parentElement.style.background = NEWS_PLACEHOLDER;
+                          }
+                        }}
+                      />
+                    )}
+                  </Box>
+                  <CardContent sx={{ flexGrow: 1, pt: 2 }}>
+                    {item.date && (
+                      <Chip label={item.date} size="small" sx={{ mb: 1 }} variant="outlined" />
+                    )}
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.35 }}>
+                      {item.title}
+                    </Typography>
+                  </CardContent>
+                  <CardActions sx={{ px: 2, pb: 2 }}>
+                    <Button
+                      size="small"
+                      endIcon={<OpenInNewIcon />}
+                      component="a"
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
-                      <TableCell sx={{ fontWeight: 500 }}>{tournament.title}</TableCell>
-                      <TableCell>{tournament.game}</TableCell>
-                      <TableCell>{tournament.max_teams}</TableCell>
-                      <TableCell>{tournament.number_rounds}</TableCell>
-                      <TableCell>{tournament.info_tournament || '—'}</TableCell>
-                      <TableCell align="center">
-                      {user?.role === 'user' ? (
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          size="small"
-                          onClick={() => handleRegister(tournament.id)}
-                          disabled={registering === tournament.id}
-                          sx={{
-                            background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
-                            boxShadow: '0 0 10px rgba(0, 212, 255, 0.5)',
-                            '&:hover': {
-                              background: 'linear-gradient(135deg, #5eeaff 0%, #00d4ff 100%)',
-                              boxShadow: '0 0 20px rgba(0, 212, 255, 0.7)',
-                            },
-                          }}
-                        >
-                          {registering === tournament.id ? 'РЕГИСТРАЦИЯ...' : 'ЗАРЕГИСТРИРОВАТЬСЯ'}
-                        </Button>
-                      ) : user?.role === 'organizer' ? (
-                        <Chip 
-                          label="Организатор" 
-                          color="primary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      ) : user?.role === 'manager' ? (
-                        <Chip 
-                          label="Менеджер" 
-                          color="secondary" 
-                          variant="outlined"
-                          size="small"
-                        />
-                      ) : (
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => navigate('/login')}
-                        >
-                          Войти для регистрации
-                        </Button>
-                      )}
-                    </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+                      Читать
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+            {news.length === 0 && (
+              <Grid size={{ xs: 12 }}>
+                <Typography color="text.secondary">Новости временно недоступны</Typography>
+              </Grid>
+            )}
+          </Grid>
         </Box>
+
+        <Divider sx={{ mb: 4, borderColor: 'rgba(0, 212, 255, 0.2)' }} />
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2, bgcolor: 'rgba(255, 0, 68, 0.1)', border: '1px solid #ff0044' }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Турниры: 1/3 слева пусто, 2/3 справа */}
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 0, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                mb: 3,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
+              <EmojiEventsIcon color="primary" />
+              Турниры
+            </Typography>
+
+            {tournaments.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <Typography variant="h6" color="text.secondary">
+                  Нет доступных турниров
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Зайдите позже — турниры скоро появятся
+                </Typography>
+              </Paper>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {tournaments.map((tournament) => (
+                  <Card
+                    key={tournament.id}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      overflow: 'hidden',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { borderColor: 'primary.main' },
+                    }}
+                  >
+                    <CardMedia
+                      component="img"
+                      sx={{
+                        width: { xs: '100%', sm: 200 },
+                        height: { xs: 160, sm: 'auto' },
+                        minHeight: { sm: 140 },
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                        bgcolor: 'rgba(0, 212, 255, 0.06)',
+                      }}
+                      image={bannerSrc(tournament.banner_url)}
+                      alt={tournament.title}
+                      onError={(e) => {
+                        const el = e.target as HTMLImageElement;
+                        el.src = '';
+                        el.style.background =
+                          'linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(255,0,68,0.15) 100%)';
+                      }}
+                    />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, p: 2 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        {tournament.title}
+                      </Typography>
+                      <Chip label={tournament.game} size="small" sx={{ alignSelf: 'flex-start', mb: 1 }} />
+                      <Typography variant="body1" sx={{ color: 'primary.light', fontWeight: 600, mb: 1 }}>
+                        Призовой фонд: {formatMoney(tournament.prize_pool)}
+                      </Typography>
+                      {tournament.entry_fee > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          Взнос: {formatMoney(tournament.entry_fee)}
+                        </Typography>
+                      )}
+                      <Box sx={{ mt: 'auto', pt: 2 }}>
+                        <Button variant="contained" onClick={() => setSelected(tournament)}>
+                          Подробнее
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </Grid>
+        </Grid>
       </Container>
+
+      <Dialog open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" fullWidth>
+        {selected && (
+          <>
+            <DialogTitle sx={{ fontWeight: 700 }}>{selected.title}</DialogTitle>
+            <DialogContent dividers>
+              {selected.banner_url && (
+                <Box
+                  component="img"
+                  src={bannerSrc(selected.banner_url)}
+                  alt=""
+                  sx={{ width: '100%', borderRadius: 1, mb: 2, maxHeight: 220, objectFit: 'cover' }}
+                />
+              )}
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Игра:</strong> {selected.game}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Статус:</strong> {statusLabel[selected.status] || selected.status}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Старт:</strong> {formatDate(selected.start_date)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Регистрация до:</strong> {formatDate(selected.registration_deadline)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Макс. команд:</strong> {selected.max_teams}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Раундов:</strong> {selected.number_rounds}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Призовой фонд:</strong> {formatMoney(selected.prize_pool)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                <strong>Взнос:</strong>{' '}
+                {selected.entry_fee > 0 ? formatMoney(selected.entry_fee) : 'Бесплатно'}
+              </Typography>
+              {(selected.description || selected.info_tournament) && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Описание
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                    {selected.description || selected.info_tournament}
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 2, flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
+              {canRegister ? (
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  disabled={registering === selected.id}
+                  onClick={() => handleRegister(selected.id)}
+                  sx={{
+                    background: 'linear-gradient(135deg, #00d4ff 0%, #0099cc 100%)',
+                  }}
+                >
+                  {registering === selected.id ? 'Регистрация...' : 'Зарегистрироваться'}
+                </Button>
+              ) : user?.role === 'organizer' ? (
+                <Chip label="Доступно организаторам" color="primary" sx={{ alignSelf: 'center' }} />
+              ) : user?.role === 'manager' ? (
+                <Chip label="Менеджер" color="secondary" sx={{ alignSelf: 'center' }} />
+              ) : (
+                <Button variant="contained" fullWidth onClick={() => navigate('/login')}>
+                  Войти для регистрации
+                </Button>
+              )}
+              <Button onClick={() => setSelected(null)}>Закрыть</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </>
   );
 };

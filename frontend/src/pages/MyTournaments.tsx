@@ -17,11 +17,7 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  AppBar,
-  Toolbar,
-  Menu,
   MenuItem,
-  Avatar,
   Select,
   FormControl,
   InputLabel,
@@ -41,10 +37,6 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   EmojiEvents as EmojiEventsIcon,
-  Logout as LogoutIcon,
-  AccountCircle as AccountCircleIcon,
-  Chat as ChatIcon,
-  Subscriptions as SubscriptionsIcon,
   ArrowBack as ArrowBackIcon,
   Diamond as DiamondIcon,
   AttachMoney as AttachMoneyIcon,
@@ -59,14 +51,14 @@ import {
 } from '@mui/icons-material';
 import { tournamentsApi } from '../api/tournaments';
 import { Tournament, TournamentCreate, UserSubscription } from '../types';
+import NavBar from '../components/NavBar';
 
 const MyTournaments: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
   const [customGame, setCustomGame] = useState('');
@@ -472,38 +464,6 @@ const MyTournaments: React.FC = () => {
     }
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    handleMenuClose();
-    logout();
-    navigate('/login');
-  };
-
-  const handleProfile = () => {
-    handleMenuClose();
-    navigate('/profile');
-  };
-
-  const handleThemes = () => {
-    handleMenuClose();
-    navigate('/themes');
-  };
-
-  const handleMessenger = () => {
-    navigate('/messenger');
-  };
-
-  const handleSubscription = () => {
-    navigate('/subscription');
-  };
-
   const handleBack = () => {
     navigate('/client/tournaments');
   };
@@ -540,50 +500,7 @@ const MyTournaments: React.FC = () => {
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate('/client/tournaments')}>
-            🎮 Киберспортивная платформа
-          </Typography>
-          
-          {isAuthenticated && (
-            <>
-              <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
-                Мессенджер
-              </Button>
-              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
-                Подписка
-              </Button>
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 2 }} onClick={handleMenuOpen}>
-                <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <Typography variant="body2" sx={{ mr: 1 }}>
-                  {user?.username}
-                </Typography>
-              </Box>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                <MenuItem onClick={handleProfile}>
-                  <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                </MenuItem>
-                <MenuItem onClick={handleThemes}>
-                  <ImageIcon sx={{ mr: 1 }} /> Темы
-                </MenuItem>
-                <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                </MenuItem>
-              </Menu>
-            </>
-          )}
-        </Toolbar>
-      </AppBar>
+      <NavBar />
 
       <Container maxWidth="xl">
         <Box sx={{ mt: 4 }}>

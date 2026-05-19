@@ -20,11 +20,25 @@ import People from '@mui/icons-material/People';
 import AdminPanelSettings from '@mui/icons-material/AdminPanelSettings';
 import EmojiEvents from '@mui/icons-material/EmojiEvents';
 import Computer from '@mui/icons-material/Computer';
+import AccountBalanceWallet from '@mui/icons-material/AccountBalanceWallet';
+import Login from '@mui/icons-material/Login';
+
+const API = 'http://localhost:8080';
+
+const navAvatarSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return `${API}${url}`;
+};
 
 const NavBar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  const hasToken = !!localStorage.getItem('token');
+  const showAuth = isAuthenticated || hasToken;
+  const showGuest = !showAuth;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -34,96 +48,84 @@ const NavBar: React.FC = () => {
     setAnchorEl(null);
   };
 
+  const go = (path: string) => {
+    handleMenuClose();
+    navigate(path);
+  };
+
   const handleLogout = () => {
     handleMenuClose();
     logout();
     navigate('/login');
   };
 
-  const handleProfile = () => {
-    handleMenuClose();
-    navigate('/profile');
-  };
-
-  const handleThemes = () => {
-    handleMenuClose();
-    navigate('/themes');
-  };
-
-  const handleMessenger = () => {
-    navigate('/messenger');
-  };
-
-  const handleSubscription = () => {
-    navigate('/subscription');
-  };
-
-  const handleFriends = () => {
-    navigate('/friends');
-  };
-
-  const handleAdminPanel = () => {
-    navigate('/dashboard');
-  };
-
-  const handleMyTournaments = () => {
-    navigate('/my-tournaments');
-  };
-
-  const isGuest = !isAuthenticated && !localStorage.getItem('token');
-
   return (
     <AppBar position="static">
-      <Toolbar>
-        <Typography 
-          variant="h6" 
-          sx={{ flexGrow: 1, cursor: 'pointer' }} 
+      <Toolbar sx={{ minHeight: { xs: 100, sm: 120 } }}>
+        <Box
+          sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
           onClick={() => navigate('/client/tournaments')}
         >
-          🎮 Киберспортивная платформа
-        </Typography>
-        
-        {!isGuest && isAuthenticated && (
+          <Box
+            component="img"
+            src={`${process.env.PUBLIC_URL}/logo.jpg`}
+            alt="GAMER.OK"
+            sx={{
+              height: { xs: 96, sm: 112 },
+              maxWidth: { xs: 840, sm: 1140 },
+              width: 'auto',
+              objectFit: 'contain',
+              objectPosition: 'left center',
+              display: 'block',
+            }}
+          />
+        </Box>
+
+        {showGuest && (
+          <Button color="inherit" startIcon={<Login />} onClick={() => navigate('/login')}>
+            Войти
+          </Button>
+        )}
+
+        {showAuth && (
           <>
-            <Button color="inherit" startIcon={<Chat />} onClick={handleMessenger} sx={{ mr: 1 }}>
+            <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/messenger')} sx={{ mr: 1 }}>
               Мессенджер
             </Button>
-            <Button color="inherit" startIcon={<Subscriptions />} onClick={handleSubscription} sx={{ mr: 1 }}>
+            <Button color="inherit" startIcon={<Subscriptions />} onClick={() => navigate('/subscription')} sx={{ mr: 1 }}>
               Подписка
             </Button>
-            
-            {/* Кнопка "Друзья" только для обычных пользователей */}
+
             {user?.role === 'user' && (
-              <Button color="inherit" startIcon={<People />} onClick={handleFriends} sx={{ mr: 1 }}>
+              <Button color="inherit" startIcon={<People />} onClick={() => navigate('/friends')} sx={{ mr: 1 }}>
                 Друзья
               </Button>
             )}
-            
-            {/* Кнопка "Мои турниры" для организатора */}
+
             {user?.role === 'organizer' && (
-              <Button color="inherit" startIcon={<EmojiEvents />} onClick={handleMyTournaments} sx={{ mr: 1 }}>
+              <Button color="inherit" startIcon={<EmojiEvents />} onClick={() => navigate('/my-tournaments')} sx={{ mr: 1 }}>
                 Мои турниры
               </Button>
             )}
-            
-            {/* Кнопка "Админ-панель" для менеджера */}
+
             {user?.role === 'manager' && (
-              <Button color="inherit" startIcon={<AdminPanelSettings />} onClick={handleAdminPanel} sx={{ mr: 1 }}>
+              <Button color="inherit" startIcon={<AdminPanelSettings />} onClick={() => navigate('/dashboard')} sx={{ mr: 1 }}>
                 Админ-панель
               </Button>
             )}
-            
-            {/* Меню пользователя (аватар) */}
+
             <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 2 }} onClick={handleMenuOpen}>
-              <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
+              <Avatar
+                src={navAvatarSrc(user?.avatar_url)}
+                sx={{ width: 40, height: 40, mr: 1, border: '2px solid rgba(0, 212, 255, 0.5)' }}
+              >
                 {user?.username?.[0]?.toUpperCase() || 'U'}
               </Avatar>
               <Typography variant="body2" sx={{ mr: 1 }}>
-                {user?.username}
+                {user?.username || 'Профиль'}
               </Typography>
             </Box>
-            
-            {/* Выпадающее меню */}
+
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -131,16 +133,19 @@ const NavBar: React.FC = () => {
               anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
               transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              <MenuItem onClick={handleProfile}>
+              <MenuItem onClick={() => go('/profile')}>
                 <AccountCircle sx={{ mr: 1 }} /> Мой профиль
               </MenuItem>
-              
-              <MenuItem onClick={handleThemes}>
+              <MenuItem onClick={() => go('/wallet')}>
+                <AccountBalanceWallet sx={{ mr: 1 }} /> Мой кошелёк
+              </MenuItem>
+              <MenuItem onClick={() => go('/themes')}>
                 <Computer sx={{ mr: 1 }} /> Темы
               </MenuItem>
-              
+              <MenuItem onClick={() => go('/client/tournaments')}>
+                <EmojiEvents sx={{ mr: 1 }} /> Турниры
+              </MenuItem>
               <Divider />
-              
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} /> Выйти
               </MenuItem>

@@ -158,10 +158,12 @@ func (h *SupportHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
     var response []map[string]interface{}
     for _, msg := range messages {
+        text, img := parseImageFromMessage(msg.Message)
         item := map[string]interface{}{
             "id":           msg.ID,
             "user_id":      msg.UserID,
-            "message":      msg.Message,
+            "message":      text,
+            "image_url":    img,
             "is_from_user": msg.IsFromUser,
             "is_read":      msg.IsRead,
             "created_at":   msg.CreatedAt,

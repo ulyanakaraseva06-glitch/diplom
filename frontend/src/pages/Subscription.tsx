@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useThemeContext } from '../contexts/ThemeContext';
 import {
@@ -13,11 +12,6 @@ import {
   Button,
   CircularProgress,
   Alert,
-  AppBar,
-  Toolbar,
-  Menu,
-  MenuItem,
-  Avatar,
   List,
   ListItem,
   ListItemIcon,
@@ -26,19 +20,15 @@ import {
   Paper,
   Divider,
 } from '@mui/material';
-import LogoutIcon from '@mui/icons-material/Logout';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import ChatIcon from '@mui/icons-material/Chat';
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import PeopleIcon from '@mui/icons-material/People';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import NavBar from '../components/NavBar';
 import StarIcon from '@mui/icons-material/Star';
+import PeopleIcon from '@mui/icons-material/People';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ComputerIcon from '@mui/icons-material/Computer';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import DiamondIcon from '@mui/icons-material/Diamond';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { clientApi } from '../api/clientApi';
 
 interface Subscription {
   id: string;
@@ -49,19 +39,19 @@ interface Subscription {
 }
 
 const SubscriptionPage: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
   const { theme } = useThemeContext();
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [subscribing, setSubscribing] = useState<string | null>(null);
   const [userSubscription, setUserSubscription] = useState<any>(null);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   useEffect(() => {
     fetchSubscriptions();
     fetchUserSubscription();
+    clientApi.getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {});
   }, []);
 
   const fetchSubscriptions = async () => {
@@ -94,28 +84,19 @@ const SubscriptionPage: React.FC = () => {
     }
   };
 
-  const handleSubscribe = async (subscriptionId: string) => {
+  const handlePayWithWallet = async (subscriptionId: string, price: number) => {
+    if (walletBalance < price) {
+      alert(`Недостаточно средств. Баланс: ${walletBalance} ₽, нужно: ${price} ₽`);
+      return;
+    }
     setSubscribing(subscriptionId);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8080/api/subscriptions/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ subscription_id: subscriptionId }),
-      });
-      
-      if (response.ok) {
-        alert('Подписка оформлена!');
-        fetchUserSubscription();
-      } else {
-        const errorData = await response.json();
-        alert(errorData.message || 'Ошибка оформления подписки');
-      }
-    } catch (err) {
-      alert('Ошибка оформления подписки');
+      const data = await clientApi.paySubscription(subscriptionId);
+      setWalletBalance(data.balance);
+      alert('Подписка оплачена с кошелька!');
+      fetchUserSubscription();
+    } catch {
+      alert('Ошибка оплаты. Пополните кошелёк в меню «Мой кошелёк»');
     } finally {
       setSubscribing(null);
     }
@@ -144,52 +125,9 @@ const SubscriptionPage: React.FC = () => {
     }
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    handleMenuClose();
-    logout();
-    navigate('/client/tournaments');
-  };
-
-  const handleAdminPanel = () => {
-    handleMenuClose();
-    navigate('/dashboard');
-  };
-
-  const handleMessenger = () => {
-    navigate('/messenger');
-  };
-
-  const handleFriends = () => {
-    navigate('/friends');
-  };
-
-  const handleMyTournaments = () => {
-    navigate('/my-tournaments');
-  };
-
-  const handleProfile = () => {
-    handleMenuClose();
-    navigate('/profile');
-  };
-
-  const handleThemes = () => {
-    handleMenuClose();
-    navigate('/themes');
-  };
-
   const handleBack = () => {
     navigate('/client/tournaments');
   };
-
-  const isGuest = !isAuthenticated && !localStorage.getItem('token');
 
   const getCardGradient = (targetType: string) => {
     switch (targetType) {
@@ -240,66 +178,7 @@ const SubscriptionPage: React.FC = () => {
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Киберспортивная платформа
-          </Typography>
-          
-          {!isGuest && isAuthenticated && (
-            <>
-              <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
-                Мессенджер
-              </Button>
-              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={() => navigate('/subscription')} sx={{ mr: 1 }}>
-                Подписка
-              </Button>
-              
-              {user?.role === 'user' && (
-                <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
-                  Друзья
-                </Button>
-              )}
-              
-              {user?.role === 'organizer' && (
-                <Button color="inherit" startIcon={<EmojiEventsIcon />} onClick={handleMyTournaments} sx={{ mr: 2 }}>
-                  Мои турниры
-                </Button>
-              )}
-              
-              {user?.role === 'manager' && (
-                <Button color="inherit" startIcon={<AdminPanelSettingsIcon />} onClick={handleAdminPanel} sx={{ mr: 2 }}>
-                  Админ-панель
-                </Button>
-              )}
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <Typography variant="body2" sx={{ mr: 1 }}>
-                  {user?.username}
-                </Typography>
-              </Box>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-              >
-                <MenuItem onClick={handleProfile}>
-                  <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                </MenuItem>
-                <MenuItem onClick={handleThemes}>
-                  <ComputerIcon sx={{ mr: 1 }} /> Темы
-                </MenuItem>
-                <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                </MenuItem>
-              </Menu>
-            </>
-          )}
-        </Toolbar>
-      </AppBar>
+      <NavBar />
 
       <Container maxWidth="lg">
         <Box sx={{ mt: 4 }}>
@@ -448,29 +327,18 @@ const SubscriptionPage: React.FC = () => {
                       </List>
                     </CardContent>
                     
-                    <CardActions sx={{ p: 3, pt: 0 }}>
+                    <CardActions sx={{ p: 3, pt: 0, flexDirection: 'column', gap: 1 }}>
                       <Button
                         fullWidth
                         variant="contained"
                         size="large"
-                        onClick={() => handleSubscribe(sub.id)}
+                        onClick={() => handlePayWithWallet(sub.id, sub.price)}
                         disabled={subscribing === sub.id || (userSubscription && userSubscription.is_active)}
-                        startIcon={<StarIcon />}
-                        sx={{
-                          background: getCardGradient(sub.target_type),
-                          borderRadius: 3,
-                          py: 1.5,
-                          '&:hover': {
-                            opacity: 0.9,
-                            background: getCardGradient(sub.target_type),
-                          },
-                        }}
+                        startIcon={<AccountBalanceWalletIcon />}
                       >
-                        {subscribing === sub.id 
-                          ? 'Оформление...' 
-                          : (userSubscription && userSubscription.is_active) 
-                            ? 'Уже активна' 
-                            : 'Оформить подписку'}
+                        {subscribing === sub.id
+                          ? 'Оплата...'
+                          : `Оплатить с кошелька (${walletBalance} ₽)`}
                       </Button>
                     </CardActions>
                   </Card>

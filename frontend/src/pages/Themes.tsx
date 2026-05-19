@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { useThemeContext } from '../contexts/ThemeContext';
 import {
   Container,
@@ -10,68 +9,16 @@ import {
   Card,
   CardContent,
   Button,
-  AppBar,
-  Toolbar,
-  Menu,
-  MenuItem,
-  Avatar,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import ChatIcon from '@mui/icons-material/Chat';
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import PeopleIcon from '@mui/icons-material/People';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import ComputerIcon from '@mui/icons-material/Computer';
+import NavBar from '../components/NavBar';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import SecurityIcon from '@mui/icons-material/Security';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 
 const Themes: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useThemeContext();
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
-
-  const isGuest = !isAuthenticated && !localStorage.getItem('token');
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    handleMenuClose();
-    logout();
-    navigate('/client/tournaments');
-  };
-
-  const handleProfile = () => {
-    handleMenuClose();
-    navigate('/profile');
-  };
-
-  const handleMessenger = () => {
-    navigate('/messenger');
-  };
-
-  const handleSubscription = () => {
-    navigate('/subscription');
-  };
-
-  const handleFriends = () => {
-    navigate('/friends');
-  };
-
-  const handleThemes = () => {
-    handleMenuClose();
-    navigate('/themes');
-  };
 
   const handleBack = () => {
     navigate(-1);
@@ -114,55 +61,7 @@ const Themes: React.FC = () => {
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Киберспортивная платформа
-          </Typography>
-          
-          {!isGuest && isAuthenticated && (
-            <>
-              <Button color="inherit" startIcon={<ChatIcon />} onClick={handleMessenger} sx={{ mr: 1 }}>
-                Мессенджер
-              </Button>
-              <Button color="inherit" startIcon={<SubscriptionsIcon />} onClick={handleSubscription} sx={{ mr: 1 }}>
-                Подписка
-              </Button>
-              {user?.role === 'user' && (
-              <Button color="inherit" startIcon={<PeopleIcon />} onClick={handleFriends} sx={{ mr: 2 }}>
-                Друзья
-              </Button>
-              )}
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={handleMenuOpen}>
-                <Avatar sx={{ width: 32, height: 32, mr: 1 }}>
-                  {user?.username?.[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <Typography variant="body2" sx={{ mr: 1 }}>
-                  {user?.username}
-                </Typography>
-              </Box>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                <MenuItem onClick={handleProfile}>
-                  <AccountCircleIcon sx={{ mr: 1 }} /> Мой профиль
-                </MenuItem>
-                <MenuItem onClick={handleThemes}>
-                  <ComputerIcon sx={{ mr: 1 }} /> Темы
-                </MenuItem>
-                <MenuItem onClick={handleLogout}>
-                  <LogoutIcon sx={{ mr: 1 }} /> Выйти
-                </MenuItem>
-              </Menu>
-            </>
-          )}
-        </Toolbar>
-      </AppBar>
+      <NavBar />
 
       <Container maxWidth="lg">
         <Box sx={{ mt: 4 }}>

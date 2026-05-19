@@ -83,6 +83,39 @@ func (r *UserRepository) FindByID(ctx context.Context, id int) (*models.User, er
     return &user, nil
 }
 
+// ListPlayers - игроки (role=user) с поиском по никнейму
+func (r *UserRepository) ListPlayers(ctx context.Context, search string, excludeID, limit int) ([]*models.User, error) {
+    query := `
+        SELECT id, email, username, role, created_at, updated_at
+        FROM users
+        WHERE role = $1 AND id != $2
+    `
+    args := []interface{}{models.RoleUser, excludeID}
+
+    if search != "" {
+        query += ` AND username ILIKE $3`
+        args = append(args, "%"+search+"%")
+    }
+    query += ` ORDER BY username LIMIT $` + fmt.Sprintf("%d", len(args)+1)
+    args = append(args, limit)
+
+    rows, err := r.db.Pool.Query(ctx, query, args...)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list players: %w", err)
+    }
+    defer rows.Close()
+
+    var users []*models.User
+    for rows.Next() {
+        var u models.User
+        if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.CreatedAt, &u.UpdatedAt); err != nil {
+            return nil, fmt.Errorf("failed to scan user: %w", err)
+        }
+        users = append(users, &u)
+    }
+    return users, nil
+}
+
 // List - список пользователей с пагинацией
 func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]*models.User, error) {
     query := `

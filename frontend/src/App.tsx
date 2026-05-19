@@ -17,7 +17,7 @@ import Messenger from './pages/Messenger';
 import Subscription from './pages/Subscription';
 import Friends from './pages/Friends';
 import Themes from './pages/Themes';
-import MyTournaments from './pages/MyTournaments';
+import Wallet from './pages/Wallet';
 
 const queryClient = new QueryClient();
 
@@ -93,15 +93,17 @@ function AppRoutes() {
           <Friends />
         </ProtectedRoute>
       } />
+
+      <Route path="/wallet" element={
+        <ProtectedRoute>
+          <Wallet />
+        </ProtectedRoute>
+      } />
       
       <Route path="/dashboard" element={
         <AdminRoute>
           <Dashboard />
         </AdminRoute>
-      } />
-
-      <Route path="/my-tournaments" element={
-        <MyTournaments />
       } />
       
       <Route path="/tournaments" element={

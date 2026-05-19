@@ -109,3 +109,63 @@ func (h *UploadHandler) UploadBanner(w http.ResponseWriter, r *http.Request) {
         "url": bannerURL,
     })
 }
+
+// UploadImage — загрузка изображения (аватар, чат)
+func (h *UploadHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		http.Error(w, `{"error": "File too large, max 5MB"}`, http.StatusBadRequest)
+		return
+	}
+
+	file, handler, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, `{"error": "Failed to get file"}`, http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	allowedTypes := map[string]bool{
+		"image/jpeg": true, "image/png": true, "image/gif": true, "image/webp": true,
+	}
+	contentType := handler.Header.Get("Content-Type")
+	if !allowedTypes[contentType] {
+		http.Error(w, `{"error": "Invalid file type"}`, http.StatusBadRequest)
+		return
+	}
+
+	projectRoot := utils.GetProjectRoot()
+	uploadDir := filepath.Join(projectRoot, "uploads", "images")
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		http.Error(w, `{"error": "Failed to create directory"}`, http.StatusInternalServerError)
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(handler.Filename))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	filename := fmt.Sprintf("img_%d_%d%s", userID, time.Now().UnixNano(), ext)
+	filePath := filepath.Join(uploadDir, filename)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		http.Error(w, `{"error": "Failed to save file"}`, http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, `{"error": "Failed to save file"}`, http.StatusInternalServerError)
+		return
+	}
+
+	imageURL := "http://localhost:8080/uploads/images/" + filename
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"url": imageURL})
+}

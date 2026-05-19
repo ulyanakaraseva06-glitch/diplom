@@ -1,32 +1,48 @@
 package handlers
 
 import (
-    "encoding/json"
-    "log"
-    "net/http"
-    "time"
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
 
-    "esports-manager/internal/middleware"
-    "esports-manager/internal/models"
-    "esports-manager/internal/repository"
-    "esports-manager/internal/services"
+	"esports-manager/internal/middleware"
+	"esports-manager/internal/models"
+	"esports-manager/internal/repository"
+	"esports-manager/internal/services"
 
-    "github.com/golang-jwt/jwt/v5"
-    "golang.org/x/crypto/bcrypt"
+	"github.com/golang-jwt/jwt/v5"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-    userRepo    *repository.UserRepository
-    syncService *services.SyncService
-    jwtSecret   []byte
+	userRepo    *repository.UserRepository
+	syncService *services.SyncService
+	mongoDB     *mongo.Database
+	jwtSecret   []byte
 }
 
-func NewAuthHandler(userRepo *repository.UserRepository, syncService *services.SyncService, jwtSecret string) *AuthHandler {
-    return &AuthHandler{
-        userRepo:    userRepo,
-        syncService: syncService,
-        jwtSecret:   []byte(jwtSecret),
-    }
+func NewAuthHandler(userRepo *repository.UserRepository, syncService *services.SyncService, mongoDB *mongo.Database, jwtSecret string) *AuthHandler {
+	return &AuthHandler{
+		userRepo:    userRepo,
+		syncService: syncService,
+		mongoDB:     mongoDB,
+		jwtSecret:   []byte(jwtSecret),
+	}
+}
+
+func (h *AuthHandler) hasActiveSubscription(userID int) bool {
+	if h.mongoDB == nil {
+		return false
+	}
+	count, err := h.mongoDB.Collection("user_subscriptions").CountDocuments(
+		context.Background(),
+		bson.M{"user_id": userID, "is_active": true},
+	)
+	return err == nil && count > 0
 }
 
 type LoginRequest struct {
@@ -141,6 +157,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    if h.syncService != nil {
+        if err := h.syncService.SyncUser(r.Context(), user); err != nil {
+            log.Printf("Login: failed to sync user %d to MongoDB: %v", user.ID, err)
+        }
+    }
+
     // Генерация JWT токена
     token, err := h.generateToken(user.ID, user.Role)
     if err != nil {
@@ -197,6 +219,12 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    if h.syncService != nil {
+        if err := h.syncService.SyncUser(r.Context(), user); err != nil {
+            log.Printf("GetMe: failed to sync user %d to MongoDB: %v", user.ID, err)
+        }
+    }
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(user.ToResponse())
 }
@@ -219,6 +247,11 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
     if req.Username == "" {
         http.Error(w, "Username is required", http.StatusBadRequest)
+        return
+    }
+
+    if !h.hasActiveSubscription(userID) {
+        http.Error(w, "Active subscription required to change username", http.StatusForbidden)
         return
     }
 
