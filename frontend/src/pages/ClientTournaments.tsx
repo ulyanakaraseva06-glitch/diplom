@@ -25,6 +25,8 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import NavBar from '../components/NavBar';
 import LunoxSpinFigure from '../components/LunoxSpinFigure';
+import DragonRunnerGame from '../components/DragonRunnerGame';
+import DragonRunnerLeaderboard from '../components/DragonRunnerLeaderboard';
 import RegisterTournamentDialog from '../components/RegisterTournamentDialog';
 import TournamentRegistrationActions from '../components/TournamentRegistrationActions';
 import DiamondIcon from '@mui/icons-material/Diamond';
@@ -108,6 +110,17 @@ const ClientTournaments: React.FC = () => {
   const [selected, setSelected] = useState<Tournament | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [myRegs, setMyRegs] = useState<MyRegistration[]>([]);
+  const [leaderboardKey, setLeaderboardKey] = useState(0);
+
+  const handleDragonGameEnd = useCallback(async (score: number) => {
+    if (score < 1) return;
+    try {
+      await clientApi.submitDragonRunnerScore(score);
+      setLeaderboardKey((k) => k + 1);
+    } catch {
+      /* рейтинг обновится при следующей загрузке */
+    }
+  }, []);
 
   const loadMyRegs = useCallback(async () => {
     if (!isAuthenticated || !isClientUser) {
@@ -520,6 +533,47 @@ const ClientTournaments: React.FC = () => {
             )}
           </Grid>
         </Grid>
+
+        {isClientUser && (
+          <Box sx={{ mt: 4 }}>
+            <Divider sx={{ mb: 3, borderColor: 'rgba(0, 212, 255, 0.2)' }} />
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 700,
+                mb: 2,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'text.secondary',
+              }}
+            >
+              Мини-игра
+            </Typography>
+            <Grid container spacing={2} alignItems="stretch">
+              <Grid size={{ xs: 12, md: 8 }}>
+                <DragonRunnerGame onGameEnd={handleDragonGameEnd} />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <DragonRunnerLeaderboard refreshKey={leaderboardKey} />
+              </Grid>
+            </Grid>
+          </Box>
+        )}
+
+        <Box sx={{ mt: 4, mb: 2 }}>
+          <Divider sx={{ mb: 2, borderColor: 'rgba(0, 212, 255, 0.2)' }} />
+          <Box sx={{ textAlign: 'center', py: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.9 }}>
+              ООО &quot;Крутые девчонки&quot;
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.9 }}>
+              Почта для связи: girl_cul@mail.ru
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ lineHeight: 1.9 }}>
+              Телефон для связи: 8-800-555-35-35
+            </Typography>
+          </Box>
+        </Box>
       </Container>
 
       <Dialog open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" fullWidth>

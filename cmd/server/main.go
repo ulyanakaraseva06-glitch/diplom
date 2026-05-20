@@ -115,6 +115,8 @@ func main() {
     api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/minigame/leaderboard", clientHandler.GetDragonRunnerLeaderboard).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/minigame/score", clientHandler.SubmitDragonRunnerScore).Methods("POST", "OPTIONS")
     api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
 
     // календарь

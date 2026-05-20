@@ -48,6 +48,14 @@ export interface PlayerUser {
   has_subscription?: boolean;
 }
 
+export interface DragonRunnerLeaderboardEntry {
+  rank: number;
+  user_id: number;
+  username: string;
+  avatar_url: string;
+  score: number;
+}
+
 export interface FriendRequestItem {
   id: string;
   from_user_id: number;
@@ -446,4 +454,16 @@ export const clientApi = {
       headers: authHeaders(),
     }).then(handleJsonArray<TournamentApplication>);
   },
+
+  getDragonRunnerLeaderboard: () =>
+    fetch(`${API}/client/minigame/leaderboard`, { headers: authHeaders() }).then(
+      handleJsonArray<DragonRunnerLeaderboardEntry>
+    ),
+
+  submitDragonRunnerScore: (score: number) =>
+    fetch(`${API}/client/minigame/score`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ score }),
+    }).then(handleJson<{ best_score: number; improved: boolean }>),
 };
