@@ -72,6 +72,8 @@ func main() {
     userHandler := handlers.NewUserHandler(userRepo)
    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
    uploadHandler := handlers.NewUploadHandler()
+    calendarRepo := repository.NewCalendarRepository(database)
+    calendarHandler := handlers.NewCalendarHandler(calendarRepo, tournamentRepo)
 
     // Создание роутера
     r := mux.NewRouter()
@@ -114,7 +116,12 @@ func main() {
     api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
     api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
-    
+
+    // календарь
+    api.HandleFunc("/calendar/events", calendarHandler.GetEvents).Methods("GET", "OPTIONS")
+    api.HandleFunc("/calendar/events", calendarHandler.CreateEvent).Methods("POST", "OPTIONS")
+    api.HandleFunc("/calendar/events/{id:[0-9]+}", calendarHandler.UpdateEvent).Methods("PUT", "OPTIONS")
+    api.HandleFunc("/calendar/events/{id:[0-9]+}", calendarHandler.DeleteEvent).Methods("DELETE", "OPTIONS")
     // Команды
     api.HandleFunc("/client/teams", clientHandler.ListTeams).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/teams", clientHandler.CreateTeam).Methods("POST", "OPTIONS")

@@ -5,6 +5,7 @@ import { registrationsApi } from '../api/registrations';
 import { usersApi } from '../api/users';
 import { supportApi } from '../api/support';
 import { apiClient } from '../api/client';
+import EventCalendar from '../components/EventCalendar';
 import {
   Container,
   Typography,
@@ -153,7 +154,9 @@ const loadStats = async () => {
               </Paper>
             </Grid>
           </Grid>
-
+          <Box sx={{ mb: 4, height: 600, overflow: 'auto' }}>
+            <EventCalendar />
+             </Box>
           {/* Карточки навигации */}
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 4 }}>
