@@ -66,16 +66,16 @@ func (r *SupportRepository) GetMessages(ctx context.Context, userID int, limit, 
     return messages, nil
 }
 
-// GetUnreadCount - количество непрочитанных сообщений для пользователя
-func (r *SupportRepository) GetUnreadCount(ctx context.Context, userID int) (int, error) {
+// GetUnreadCount - непрочитанные входящие (fromUser=true — для менеджера, false — для игрока)
+func (r *SupportRepository) GetUnreadCount(ctx context.Context, userID int, fromUser bool) (int, error) {
     query := `
         SELECT COUNT(*)
         FROM support_messages
-        WHERE user_id = $1 AND is_read = FALSE
+        WHERE user_id = $1 AND is_from_user = $2 AND is_read = FALSE
     `
 
     var count int
-    err := r.db.Pool.QueryRow(ctx, query, userID).Scan(&count)
+    err := r.db.Pool.QueryRow(ctx, query, userID, fromUser).Scan(&count)
     if err != nil {
         return 0, fmt.Errorf("failed to get unread count: %w", err)
     }
@@ -83,15 +83,15 @@ func (r *SupportRepository) GetUnreadCount(ctx context.Context, userID int) (int
     return count, nil
 }
 
-// MarkAsRead - отметить все сообщения пользователя как прочитанные
-func (r *SupportRepository) MarkAsRead(ctx context.Context, userID int) error {
+// MarkAsRead - отметить входящие прочитанными (fromUser — чьи сообщения помечаем)
+func (r *SupportRepository) MarkAsRead(ctx context.Context, userID int, fromUser bool) error {
     query := `
         UPDATE support_messages
         SET is_read = TRUE
-        WHERE user_id = $1 AND is_read = FALSE
+        WHERE user_id = $1 AND is_from_user = $2 AND is_read = FALSE
     `
 
-    _, err := r.db.Pool.Exec(ctx, query, userID)
+    _, err := r.db.Pool.Exec(ctx, query, userID, fromUser)
     if err != nil {
         return fmt.Errorf("failed to mark messages as read: %w", err)
     }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -17,31 +18,41 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+// SupportNotifier — уведомление менеджеров о новых сообщениях в поддержку (WebSocket).
+type SupportNotifier interface {
+	NotifySupportMessage(ctx context.Context, msg *models.SupportMessage)
+}
+
 type ClientHandler struct {
 	mongoDB          *mongo.Database
 	userRepo         *repository.UserRepository
 	supportRepo      *repository.SupportRepository
+	supportNotifier  SupportNotifier
 	tournamentRepo   *repository.TournamentRepository
 	registrationRepo *repository.RegistrationRepository
-    banRepo          *repository.BanRepository  
-	neo4jClient      *neo4j.Neo4jClient 
+	banRepo          *repository.BanRepository
+	neo4jClient      *neo4j.Neo4jClient
 }
 
 func NewClientHandler(
 	mongoDB *mongo.Database,
 	userRepo *repository.UserRepository,
 	supportRepo *repository.SupportRepository,
+	supportNotifier SupportNotifier,
 	tournamentRepo *repository.TournamentRepository,
 	registrationRepo *repository.RegistrationRepository,
-    banRepo *repository.BanRepository, 
+	banRepo *repository.BanRepository,
 	neo4jClient *neo4j.Neo4jClient,
 ) *ClientHandler {
 	return &ClientHandler{
-		mongoDB: mongoDB, userRepo: userRepo,
-		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
+		mongoDB:          mongoDB,
+		userRepo:         userRepo,
+		supportRepo:      supportRepo,
+		supportNotifier:  supportNotifier,
+		tournamentRepo:   tournamentRepo,
 		registrationRepo: registrationRepo,
-        banRepo:          banRepo, 
-		neo4jClient:      neo4jClient, 
+		banRepo:          banRepo,
+		neo4jClient:      neo4jClient,
 	}
 }
 // GetUserTheme - получение темы пользователя

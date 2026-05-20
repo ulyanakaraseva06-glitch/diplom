@@ -1,11 +1,12 @@
 import Grid from '@mui/material/Grid';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supportApi } from '../api/support';
 import EmojiPicker from '../components/EmojiPicker';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { IconButton, Tooltip } from '@mui/material';
 import { SupportMessage, ActiveChat } from '../types';
+import { mediaUrl } from '../utils/media';
 import {
   Container,
   Typography,
@@ -28,6 +29,11 @@ import PersonIcon from '@mui/icons-material/Person';
 import { useNavigate } from 'react-router-dom';
 import HomeIcon from '@mui/icons-material/Home';
 
+const appendUnique = (prev: SupportMessage[], msg: SupportMessage) => {
+  if (prev.some((m) => m.id === msg.id)) return prev;
+  return [...prev, msg];
+};
+
 const Support: React.FC = () => {
   const { token, isManager } = useAuth();
   const navigate = useNavigate();
@@ -45,30 +51,29 @@ const Support: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [sendingFile, setSendingFile] = useState(false);
 
-  // Загрузка активных чатов для менеджера
+  const loadActiveChats = useCallback(async () => {
+    try {
+      const response = await supportApi.getActiveChats();
+      setChats(response.data);
+      const unreadMap: Record<number, number> = {};
+      response.data.forEach((chat) => {
+        if (chat.unread_count > 0) {
+          unreadMap[chat.id] = chat.unread_count;
+        }
+      });
+      setUnreadCounts(unreadMap);
+    } catch (err) {
+      console.error('Ошибка загрузки активных чатов:', err);
+      setError('Ошибка загрузки списка чатов');
+    }
+  }, []);
+
   useEffect(() => {
     if (isManager) {
-      const loadActiveChats = async () => {
-        try {
-          const response = await supportApi.getActiveChats();
-          setChats(response.data);
-          const unreadMap: Record<number, number> = {};
-          response.data.forEach(chat => {
-            if (chat.unread_count > 0) {
-              unreadMap[chat.id] = chat.unread_count;
-            }
-          });
-          setUnreadCounts(unreadMap);
-        } catch (err) {
-          console.error('Ошибка загрузки активных чатов:', err);
-          setError('Ошибка загрузки списка чатов');
-        }
-      };
       loadActiveChats();
     }
-  }, [isManager]);
+  }, [isManager, loadActiveChats]);
 
-  // Загрузка сообщений при выборе пользователя
   useEffect(() => {
     if (!selectedUserId) return;
 
@@ -76,11 +81,12 @@ const Support: React.FC = () => {
       try {
         setLoading(true);
         const response = await supportApi.getMessages(selectedUserId);
-console.log('Loaded messages with images:', response.data);
-setMessages(response.data || []);
+        setMessages(response.data || []);
         await supportApi.markAsRead(selectedUserId);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Ошибка загрузки сообщений');
+        setUnreadCounts((prev) => ({ ...prev, [selectedUserId]: 0 }));
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Ошибка загрузки сообщений';
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -89,7 +95,6 @@ setMessages(response.data || []);
     loadMessages();
   }, [selectedUserId]);
 
-  // WebSocket подключение
   useEffect(() => {
     if (!token || !selectedUserId) return;
 
@@ -103,38 +108,39 @@ setMessages(response.data || []);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      console.log('WebSocket connected for user', selectedUserId);
-    };
-
     ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('WebSocket message keys:', Object.keys(data));  // добавить
-  console.log('WebSocket message:', data);
-  if (selectedUserIdRef.current === data.user_id) {
-    setMessages(prev => [...prev, data]);
-  }
-};
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.onclose = (event) => {
-      console.log('WebSocket disconnected for user', selectedUserId, event.code);
+      const data = JSON.parse(event.data) as SupportMessage;
+      if (selectedUserIdRef.current === data.user_id) {
+        setMessages((prev) => appendUnique(prev, data));
+        if (data.is_from_user) {
+          loadActiveChats();
+        }
+      }
     };
 
     return () => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.close();
       }
     };
-  }, [token, selectedUserId]);
+  }, [token, selectedUserId, loadActiveChats]);
 
-  // Автоскролл
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const sendMessageWithImage = async (imageUrl: string) => {
+    if (!selectedUserId) return;
+    const url = imageUrl.startsWith('http') ? imageUrl : `http://localhost:8080${imageUrl}`;
+    try {
+      const { data } = await supportApi.sendMessage(selectedUserId, { message: '', image_url: url });
+      setMessages((prev) => appendUnique(prev, data));
+      await loadActiveChats();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка отправки изображения';
+      setError(msg);
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -153,36 +159,25 @@ setMessages(response.data || []);
     }
   };
 
-  const sendMessageWithImage = async (imageUrl: string) => {
-  if (!selectedUserId) return;
-
-  // Добавляем полный URL
-  const fullUrl = imageUrl.startsWith('http') ? imageUrl : `http://localhost:8080${imageUrl}`;
-
-  try {
-    await supportApi.sendMessage(selectedUserId, { message: '', image_url: fullUrl });
-  } catch (err: any) {
-    setError(err.response?.data?.message || 'Ошибка отправки изображения');
-  }
-};
-
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedUserId) return;
 
     setSending(true);
     try {
-      await supportApi.sendMessage(selectedUserId, { message: newMessage });
+      const { data } = await supportApi.sendMessage(selectedUserId, { message: newMessage });
+      setMessages((prev) => appendUnique(prev, data));
       setNewMessage('');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка отправки сообщения');
+      await loadActiveChats();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка отправки сообщения';
+      setError(msg);
     } finally {
       setSending(false);
     }
   };
 
-  // Проверка, что пользователь менеджер
   if (!isManager) {
-    return null; // Пользовательский чат реализован в другом модуле
+    return null;
   }
 
   return (
@@ -195,10 +190,13 @@ setMessages(response.data || []);
           </Button>
         </Box>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+            {error}
+          </Alert>
+        )}
 
         <Grid container spacing={3}>
-          {/* Список активных чатов */}
           <Grid size={{ xs: 12, md: 4 }}>
             <Paper sx={{ height: 600, overflow: 'auto' }}>
               <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
@@ -218,12 +216,18 @@ setMessages(response.data || []);
                       sx={{
                         cursor: 'pointer',
                         bgcolor: selectedUserId === chat.id ? 'action.selected' : 'transparent',
-                        '&:hover': { bgcolor: 'action.hover' }
+                        '&:hover': { bgcolor: 'action.hover' },
                       }}
                     >
                       <ListItemAvatar>
-                        <Badge badgeContent={unreadCounts[chat.id] || 0} color="error" invisible={!unreadCounts[chat.id]}>
-                          <Avatar><PersonIcon /></Avatar>
+                        <Badge
+                          badgeContent={unreadCounts[chat.id] || 0}
+                          color="error"
+                          invisible={!unreadCounts[chat.id]}
+                        >
+                          <Avatar>
+                            <PersonIcon />
+                          </Avatar>
                         </Badge>
                       </ListItemAvatar>
                       <ListItemText primary={chat.username} secondary={chat.email} />
@@ -234,7 +238,6 @@ setMessages(response.data || []);
             </Paper>
           </Grid>
 
-          {/* Окно чата */}
           <Grid size={{ xs: 12, md: 8 }}>
             <Paper sx={{ height: 600, display: 'flex', flexDirection: 'column' }}>
               {!selectedUserId ? (
@@ -249,25 +252,48 @@ setMessages(response.data || []);
 
                   <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                     {loading ? (
-                      <Box display="flex" justifyContent="center" sx={{ mt: 4 }}><CircularProgress /></Box>
+                      <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
+                        <CircularProgress />
+                      </Box>
                     ) : !messages || messages.length === 0 ? (
-                      <Typography color="text.secondary" align="center" sx={{ mt: 4 }}>Нет сообщений</Typography>
+                      <Typography color="text.secondary" align="center" sx={{ mt: 4 }}>
+                        Нет сообщений
+                      </Typography>
                     ) : (
                       <List>
                         {messages.map((msg) => (
-                          <ListItem key={msg.id} sx={{ justifyContent: msg.is_from_user ? 'flex-start' : 'flex-end' }}>
-                            <Paper sx={{ p: 1.5, maxWidth: '70%', bgcolor: msg.is_from_user ? 'grey.100' : 'primary.main', color: msg.is_from_user ? 'text.primary' : 'white', borderRadius: 2 }}>
+                          <ListItem
+                            key={msg.id}
+                            sx={{ justifyContent: msg.is_from_user ? 'flex-start' : 'flex-end' }}
+                          >
+                            <Paper
+                              sx={{
+                                p: 1.5,
+                                maxWidth: '70%',
+                                bgcolor: msg.is_from_user ? 'grey.100' : 'primary.main',
+                                color: msg.is_from_user ? 'text.primary' : 'white',
+                                borderRadius: 2,
+                              }}
+                            >
                               <ListItemText
                                 primary={
                                   <>
                                     {msg.message}
                                     {msg.image_url && (
-                                      <Box component="img" src={msg.image_url} alt="" sx={{ maxWidth: '100%', display: 'block', mt: 1, borderRadius: 1 }} />
+                                      <Box
+                                        component="img"
+                                        src={mediaUrl(msg.image_url)}
+                                        alt=""
+                                        sx={{ maxWidth: '100%', display: 'block', mt: 1, borderRadius: 1 }}
+                                      />
                                     )}
                                   </>
                                 }
-                                secondary={`${msg.is_from_user ? (msg.username || 'Пользователь') : (msg.manager_name || 'Менеджер')} • ${new Date(msg.created_at).toLocaleString()}`}
-                                secondaryTypographyProps={{ color: msg.is_from_user ? 'text.secondary' : 'grey.200', fontSize: '0.75rem' }}
+                                secondary={`${msg.is_from_user ? msg.username || 'Пользователь' : msg.manager_name || 'Менеджер'} • ${new Date(msg.created_at).toLocaleString()}`}
+                                secondaryTypographyProps={{
+                                  color: msg.is_from_user ? 'text.secondary' : 'grey.200',
+                                  fontSize: '0.75rem',
+                                }}
                               />
                             </Paper>
                           </ListItem>
@@ -291,7 +317,7 @@ setMessages(response.data || []);
                         <AttachFileIcon />
                       </IconButton>
                     </Tooltip>
-                    <EmojiPicker onPick={(emoji) => setNewMessage(prev => prev + emoji)} />
+                    <EmojiPicker onPick={(emoji) => setNewMessage((prev) => prev + emoji)} />
                     <TextField
                       fullWidth
                       size="small"
@@ -300,10 +326,19 @@ setMessages(response.data || []);
                       placeholder="Введите сообщение..."
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
                       disabled={sending}
                     />
-                    <Button variant="contained" onClick={handleSendMessage} disabled={sending || !newMessage.trim()}>
+                    <Button
+                      variant="contained"
+                      onClick={handleSendMessage}
+                      disabled={sending || !newMessage.trim()}
+                    >
                       <SendIcon />
                     </Button>
                   </Box>

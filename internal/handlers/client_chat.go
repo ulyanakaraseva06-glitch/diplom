@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -16,6 +17,16 @@ import (
 )
 
 const supportChatID = 0
+
+// GetSupportChatMessages — сообщения чата поддержки (peer_id=0).
+func (h *ClientHandler) GetSupportChatMessages(w http.ResponseWriter, r *http.Request) {
+	h.getChatMessagesForPeer(w, r, supportChatID)
+}
+
+// SendSupportChatMessage — отправка в поддержку (peer_id=0).
+func (h *ClientHandler) SendSupportChatMessage(w http.ResponseWriter, r *http.Request) {
+	h.sendChatMessageForPeer(w, r, supportChatID)
+}
 
 type chatPreview struct {
 	ID            int       `json:"id"`
@@ -116,16 +127,19 @@ type messageView struct {
 
 // GetChatMessages — сообщения чата (support id=0 или user id)
 func (h *ClientHandler) GetChatMessages(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	peerID, err := strconv.Atoi(vars["peer_id"])
 	if err != nil {
 		http.Error(w, "Invalid peer id", http.StatusBadRequest)
+		return
+	}
+	h.getChatMessagesForPeer(w, r, peerID)
+}
+
+func (h *ClientHandler) getChatMessagesForPeer(w http.ResponseWriter, r *http.Request, peerID int) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -138,7 +152,7 @@ func (h *ClientHandler) GetChatMessages(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		for _, m := range msgs {
-			text, img := parseImageFromMessage(m.Message)
+			text, img := supportMessageParts(m.Message, m.ImageURL)
 			out = append(out, messageView{
 				ID: m.ID, Text: text, ImageURL: img,
 				FromMe: m.IsFromUser, IsSupport: true, CreatedAt: m.CreatedAt,
@@ -215,16 +229,19 @@ func (h *ClientHandler) GetChatMessages(w http.ResponseWriter, r *http.Request) 
 
 // SendChatMessage — отправить сообщение
 func (h *ClientHandler) SendChatMessage(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	peerID, err := strconv.Atoi(vars["peer_id"])
 	if err != nil {
 		http.Error(w, "Invalid peer id", http.StatusBadRequest)
+		return
+	}
+	h.sendChatMessageForPeer(w, r, peerID)
+}
+
+func (h *ClientHandler) sendChatMessageForPeer(w http.ResponseWriter, r *http.Request, peerID int) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -246,13 +263,17 @@ func (h *ClientHandler) SendChatMessage(w http.ResponseWriter, r *http.Request) 
 	if peerID == supportChatID {
 		msg := &models.SupportMessage{
 			UserID: userID, Message: messageWithImage(req.Text, req.ImageURL),
-			IsFromUser: true, IsRead: false, CreatedAt: now,
+			ImageURL: req.ImageURL, IsFromUser: true, IsRead: false, CreatedAt: now,
 		}
 		if err := h.supportRepo.Create(r.Context(), msg); err != nil {
-			http.Error(w, "Failed to send", http.StatusInternalServerError)
+			log.Printf("SendSupportChatMessage user=%d: %v", userID, err)
+			http.Error(w, "Failed to send: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		text, img := parseImageFromMessage(msg.Message)
+		text, img := supportMessageParts(msg.Message, msg.ImageURL)
+		if h.supportNotifier != nil {
+			h.supportNotifier.NotifySupportMessage(r.Context(), msg)
+		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(messageView{
 			ID: msg.ID, Text: text, ImageURL: img, FromMe: true, IsSupport: true, CreatedAt: msg.CreatedAt,

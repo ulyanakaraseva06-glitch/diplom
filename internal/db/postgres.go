@@ -30,7 +30,14 @@ func NewPostgresDB(cfg *config.Config) (*PostgresDB, error) {
     }
 
     log.Println("Connected to PostgreSQL")
-    return &PostgresDB{Pool: pool}, nil
+
+    pdb := &PostgresDB{Pool: pool}
+    if err := pdb.EnsureSupportSchema(context.Background()); err != nil {
+        pool.Close()
+        return nil, fmt.Errorf("support schema: %w", err)
+    }
+
+    return pdb, nil
 }
 
 func (db *PostgresDB) Close() {
