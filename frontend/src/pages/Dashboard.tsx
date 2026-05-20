@@ -179,9 +179,9 @@ const loadStats = async () => {
                 <Card sx={{ height: '100%' }}>
                   <CardContent>
                     <AssignmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-                    <Typography variant="h6">Заявки</Typography>
+                    <Typography variant="h6">Заявки от участников</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Модерация заявок на участие
+                      Заявки игроков и команд на турниры
                     </Typography>
                     <Button variant="contained" color="warning" onClick={() => navigate('/registrations')}>
                       Перейти

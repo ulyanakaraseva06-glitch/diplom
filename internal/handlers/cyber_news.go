@@ -23,14 +23,17 @@ var (
 	cyberNewsCache    []CybersportNewsItem
 	cyberNewsCacheAt  time.Time
 	cyberNewsCacheMu  sync.Mutex
-	cyberNewsCacheTTL = 15 * time.Minute
+	cyberNewsCacheTTL = 5 * time.Minute
 
 	// Ссылки внутри блока «Главные новости»
 	mainNewsHTMLLinkRe = regexp.MustCompile(
-		`<a[^>]+href="(https://www\.cybersport\.ru/tags/[^"#?]+)"[^>]*>([\s\S]*?)</a>`,
+		`<a[^>]+href=["']((?:https://www\.cybersport\.ru)?/tags/[^"'#?]+)["'][^>]*>([\s\S]*?)</a>`,
 	)
 	mainNewsMDLinkRe = regexp.MustCompile(
 		`\[([^\]]+)\]\((https://www\.cybersport\.ru/tags/[^)]+)\)`,
+	)
+	mainNewsHrefRe = regexp.MustCompile(
+		`href=["']((?:https://www\.cybersport\.ru)?/tags/[^"'#?]+)["']`,
 	)
 	cyberNewsImageRe = regexp.MustCompile(`https://[^"\s]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\s]*)?`)
 	cyberNewsTimeRe  = regexp.MustCompile(`^\d{2}:\d{2}`)
@@ -153,13 +156,33 @@ func parseMainNewsFromSection(section string) []CybersportNewsItem {
 		})
 	}
 
+	normalizeNewsURL := func(u string) string {
+		u = strings.TrimSpace(u)
+		if strings.HasPrefix(u, "/") {
+			return "https://www.cybersport.ru" + u
+		}
+		return u
+	}
+
 	// HTML-ссылки (порядок на странице = порядок в «Главных новостях»)
 	for _, m := range mainNewsHTMLLinkRe.FindAllStringSubmatch(section, -1) {
 		if len(items) >= 3 {
 			break
 		}
 		raw := strings.TrimSpace(stripHTMLTags(m[2]))
-		add(raw, m[1])
+		add(raw, normalizeNewsURL(m[1]))
+	}
+
+	// Любые href на /tags/ в блоке (если разметка без текста в <a>)
+	if len(items) < 3 {
+		for _, m := range mainNewsHrefRe.FindAllStringSubmatch(section, -1) {
+			if len(items) >= 3 {
+				break
+			}
+			url := normalizeNewsURL(m[1])
+			path := strings.TrimPrefix(url, "https://www.cybersport.ru/tags/")
+			add(slugToTitle(path), url)
+		}
 	}
 
 	// Markdown-ссылки (если в ответе/SSR так отдаётся)
@@ -360,8 +383,10 @@ func clipHigh(limit, v int) int {
 
 // GetCybersportNews — три первые новости из раздела «Главные новости» на cybersport.ru
 func GetCybersportNews(w http.ResponseWriter, r *http.Request) {
+	forceRefresh := r.URL.Query().Get("refresh") == "1"
+
 	cyberNewsCacheMu.Lock()
-	if len(cyberNewsCache) > 0 && time.Since(cyberNewsCacheAt) < cyberNewsCacheTTL {
+	if !forceRefresh && len(cyberNewsCache) > 0 && time.Since(cyberNewsCacheAt) < cyberNewsCacheTTL {
 		items := cyberNewsCache
 		cyberNewsCacheMu.Unlock()
 		w.Header().Set("Content-Type", "application/json")

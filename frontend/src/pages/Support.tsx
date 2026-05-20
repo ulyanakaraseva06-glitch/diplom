@@ -3,10 +3,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supportApi } from '../api/support';
 import EmojiPicker from '../components/EmojiPicker';
+import ChatSenderHeader from '../components/ChatSenderHeader';
+import ChatMessageImage from '../components/ChatMessageImage';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { IconButton, Tooltip } from '@mui/material';
 import { SupportMessage, ActiveChat } from '../types';
-import { mediaUrl } from '../utils/media';
+import { messageBubbleSx, chatMetaSx, chatMessageColumnSx } from '../utils/chatStyles';
 import {
   Container,
   Typography,
@@ -230,7 +232,14 @@ const Support: React.FC = () => {
                           </Avatar>
                         </Badge>
                       </ListItemAvatar>
-                      <ListItemText primary={chat.username} secondary={chat.email} />
+                      <ListItemText
+                        primary={chat.username}
+                        secondary={chat.email}
+                        slotProps={{
+                          primary: { sx: { color: 'text.primary', fontWeight: 600 } },
+                          secondary: { sx: { color: 'text.secondary' } },
+                        }}
+                      />
                     </ListItem>
                   ))}
                 </List>
@@ -247,7 +256,19 @@ const Support: React.FC = () => {
               ) : (
                 <>
                   <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-                    <Typography variant="h6">Чат с пользователем #{selectedUserId}</Typography>
+                    {(() => {
+                      const chat = chats.find((c) => c.id === selectedUserId);
+                      return chat ? (
+                        <ChatSenderHeader
+                          username={chat.username}
+                          email={chat.email}
+                        />
+                      ) : (
+                        <Typography variant="h6" sx={{ color: 'text.primary' }}>
+                          Чат с пользователем #{selectedUserId}
+                        </Typography>
+                      );
+                    })()}
                   </Box>
 
                   <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
@@ -260,46 +281,62 @@ const Support: React.FC = () => {
                         Нет сообщений
                       </Typography>
                     ) : (
-                      <List>
-                        {messages.map((msg) => (
-                          <ListItem
-                            key={msg.id}
-                            sx={{ justifyContent: msg.is_from_user ? 'flex-start' : 'flex-end' }}
-                          >
-                            <Paper
+                      <Box>
+                        {messages.map((msg) => {
+                          const chat = chats.find((c) => c.id === selectedUserId);
+                          const isUser = msg.is_from_user;
+                          const username = isUser
+                            ? msg.username || chat?.username || 'Пользователь'
+                            : msg.manager_name || msg.username || 'Менеджер';
+                          const email = isUser ? msg.email || chat?.email : msg.email;
+                          return (
+                            <Box
+                              key={msg.id}
                               sx={{
-                                p: 1.5,
-                                maxWidth: '70%',
-                                bgcolor: msg.is_from_user ? 'grey.100' : 'primary.main',
-                                color: msg.is_from_user ? 'text.primary' : 'white',
-                                borderRadius: 2,
+                                display: 'flex',
+                                justifyContent: isUser ? 'flex-start' : 'flex-end',
+                                mb: 1.5,
                               }}
                             >
-                              <ListItemText
-                                primary={
-                                  <>
-                                    {msg.message}
-                                    {msg.image_url && (
-                                      <Box
-                                        component="img"
-                                        src={mediaUrl(msg.image_url)}
-                                        alt=""
-                                        sx={{ maxWidth: '100%', display: 'block', mt: 1, borderRadius: 1 }}
-                                      />
-                                    )}
-                                  </>
-                                }
-                                secondary={`${msg.is_from_user ? msg.username || 'Пользователь' : msg.manager_name || 'Менеджер'} • ${new Date(msg.created_at).toLocaleString()}`}
-                                secondaryTypographyProps={{
-                                  color: msg.is_from_user ? 'text.secondary' : 'grey.200',
-                                  fontSize: '0.75rem',
-                                }}
-                              />
-                            </Paper>
-                          </ListItem>
-                        ))}
+                              <Box sx={chatMessageColumnSx(!isUser)}>
+                                <ChatSenderHeader
+                                  username={username}
+                                  email={email}
+                                  avatarUrl={msg.avatar_url}
+                                  align={isUser ? 'left' : 'right'}
+                                />
+                                <Paper
+                                  sx={(theme) => ({
+                                    ...messageBubbleSx(!msg.is_from_user)(theme),
+                                    borderRadius: 2,
+                                  })}
+                                >
+                                  {msg.message ? (
+                                    <Typography
+                                      variant="body2"
+                                      component="div"
+                                      sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
+                                    >
+                                      {msg.message}
+                                    </Typography>
+                                  ) : null}
+                                  {msg.image_url && (
+                                    <ChatMessageImage
+                                      imageUrl={msg.image_url}
+                                      fromMe={!msg.is_from_user}
+                                      hasText={!!msg.message}
+                                    />
+                                  )}
+                                  <Typography variant="caption" sx={chatMetaSx(!msg.is_from_user)}>
+                                    {new Date(msg.created_at).toLocaleString()}
+                                  </Typography>
+                                </Paper>
+                              </Box>
+                            </Box>
+                          );
+                        })}
                         <div ref={messagesEndRef} />
-                      </List>
+                      </Box>
                     )}
                   </Box>
 

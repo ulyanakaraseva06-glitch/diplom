@@ -79,15 +79,26 @@ func (r *TournamentRepository) FindByID(ctx context.Context, id int) (*models.To
 
 // ClientTournamentFilter — фильтры витрины турниров
 type ClientTournamentFilter struct {
-	OrganizerID int
-	DateFrom    *time.Time
-	DateTo      *time.Time
-	IsVIP       *bool
+	OrganizerID  int
+	DateFrom     *time.Time
+	DateTo       *time.Time
+	IsVIP        *bool
+	Limit        int
+	SortByLatest bool
 }
 
 // ListForClient — турниры для клиентской витрины (из PostgreSQL)
 func (r *TournamentRepository) ListForClient(ctx context.Context, f ClientTournamentFilter) ([]*models.Tournament, error) {
-	query := `
+	orderBy := "ORDER BY start_date ASC"
+	if f.SortByLatest {
+		orderBy = "ORDER BY created_at DESC, id DESC"
+	}
+	limitClause := ""
+	if f.Limit > 0 {
+		limitClause = fmt.Sprintf(" LIMIT %d", f.Limit)
+	}
+
+	query := fmt.Sprintf(`
         SELECT id, title, game, COALESCE(description, ''), start_date, registration_deadline,
                entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, COALESCE(banner_url, ''), created_at, updated_at
         FROM tournaments
@@ -96,8 +107,8 @@ func (r *TournamentRepository) ListForClient(ctx context.Context, f ClientTourna
           AND ($2::timestamptz IS NULL OR start_date >= $2)
           AND ($3::timestamptz IS NULL OR start_date <= $3)
           AND ($4::boolean IS NULL OR is_vip = $4)
-        ORDER BY start_date ASC
-    `
+        %s%s
+    `, orderBy, limitClause)
 
 	var orgID int
 	if f.OrganizerID > 0 {

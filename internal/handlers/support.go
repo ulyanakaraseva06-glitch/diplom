@@ -78,9 +78,15 @@ func (h *SupportHandler) supportMessageResponse(ctx context.Context, msg *models
 		if manager, err := h.userRepo.FindByID(ctx, *msg.ManagerID); err == nil && manager != nil {
 			item["manager_name"] = manager.Username
 			item["username"] = manager.Username
+			item["email"] = manager.Email
 		}
-	} else if user, err := h.userRepo.FindByID(ctx, msg.UserID); err == nil && user != nil {
-		item["username"] = user.Username
+	} else if msg.IsFromUser {
+		if user, err := h.userRepo.FindByID(ctx, msg.UserID); err == nil && user != nil {
+			item["username"] = user.Username
+			item["email"] = user.Email
+		}
+	} else {
+		item["username"] = "Поддержка"
 	}
 	return item
 }

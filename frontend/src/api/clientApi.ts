@@ -153,7 +153,10 @@ export interface ChatMessage {
   from_me: boolean;
   is_support?: boolean;
   created_at: string;
+  sender_id?: number;
   username?: string;
+  email?: string;
+  avatar_url?: string;
 }
 
 export interface UserSubscription {
@@ -450,8 +453,11 @@ export const clientApi = {
       headers: authHeaders(),
     }).then(handleJson<{ message: string }>),
 
-  getRegistrationApplications: (status = '') => {
-    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+  getRegistrationApplications: (status = '', tournamentId?: number) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (tournamentId != null && tournamentId > 0) params.set('tournament_id', String(tournamentId));
+    const q = params.toString() ? `?${params.toString()}` : '';
     return fetch(`${API}/client/registrations/applications${q}`, {
       headers: authHeaders(),
     }).then(handleJsonArray<TournamentApplication>);

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -122,7 +123,24 @@ type messageView struct {
 	FromMe     bool        `json:"from_me"`
 	IsSupport  bool        `json:"is_support,omitempty"`
 	CreatedAt  time.Time   `json:"created_at"`
+	SenderID   int         `json:"sender_id,omitempty"`
 	Username   string      `json:"username,omitempty"`
+	Email      string      `json:"email,omitempty"`
+	AvatarURL  string      `json:"avatar_url,omitempty"`
+}
+
+func (h *ClientHandler) fillSenderInfo(ctx context.Context, senderID int) (username, email, avatar string) {
+	u, err := h.userRepo.FindByID(ctx, senderID)
+	if err != nil || u == nil {
+		return "Игрок", "", ""
+	}
+	return u.Username, u.Email, h.mongoAvatarURL(ctx, senderID)
+}
+
+func (h *ClientHandler) messageViewWithSender(ctx context.Context, senderID int, base messageView) messageView {
+	base.SenderID = senderID
+	base.Username, base.Email, base.AvatarURL = h.fillSenderInfo(ctx, senderID)
+	return base
 }
 
 // GetChatMessages — сообщения чата (support id=0 или user id)
@@ -153,10 +171,18 @@ func (h *ClientHandler) getChatMessagesForPeer(w http.ResponseWriter, r *http.Re
 		}
 		for _, m := range msgs {
 			text, img := supportMessageParts(m.Message, m.ImageURL)
-			out = append(out, messageView{
+			mv := messageView{
 				ID: m.ID, Text: text, ImageURL: img,
 				FromMe: m.IsFromUser, IsSupport: true, CreatedAt: m.CreatedAt,
-			})
+			}
+			if m.IsFromUser {
+				out = append(out, h.messageViewWithSender(r.Context(), m.UserID, mv))
+			} else if m.ManagerID != nil {
+				out = append(out, h.messageViewWithSender(r.Context(), *m.ManagerID, mv))
+			} else {
+				mv.Username = "Поддержка"
+				out = append(out, mv)
+			}
 		}
 	} else if peerID < 0 {
 		team, err := h.findTeamByChatPeerID(r.Context(), peerID)
@@ -176,14 +202,10 @@ func (h *ClientHandler) getChatMessagesForPeer(w http.ResponseWriter, r *http.Re
 			if cursor.Decode(&tm) != nil {
 				continue
 			}
-			uname := "Игрок"
-			if u, _ := h.userRepo.FindByID(r.Context(), tm.UserID); u != nil {
-				uname = u.Username
-			}
-			out = append(out, messageView{
+			out = append(out, h.messageViewWithSender(r.Context(), tm.UserID, messageView{
 				ID: tm.ID, Text: tm.Text, ImageURL: tm.ImageURL,
-				FromMe: tm.UserID == userID, CreatedAt: tm.CreatedAt, Username: uname,
-			})
+				FromMe: tm.UserID == userID, CreatedAt: tm.CreatedAt,
+			}))
 		}
 	} else {
 		if !h.getFriendIDSet(r.Context(), userID)[peerID] {
@@ -208,10 +230,10 @@ func (h *ClientHandler) getChatMessagesForPeer(w http.ResponseWriter, r *http.Re
 			if cursor.Decode(&dm) != nil {
 				continue
 			}
-			out = append(out, messageView{
+			out = append(out, h.messageViewWithSender(r.Context(), dm.FromUserID, messageView{
 				ID: dm.ID, Text: dm.Text, ImageURL: dm.ImageURL,
 				FromMe: dm.FromUserID == userID, CreatedAt: dm.CreatedAt,
-			})
+			}))
 		}
 	}
 
@@ -275,9 +297,9 @@ func (h *ClientHandler) sendChatMessageForPeer(w http.ResponseWriter, r *http.Re
 			h.supportNotifier.NotifySupportMessage(r.Context(), msg)
 		}
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(messageView{
+		json.NewEncoder(w).Encode(h.messageViewWithSender(r.Context(), userID, messageView{
 			ID: msg.ID, Text: text, ImageURL: img, FromMe: true, IsSupport: true, CreatedAt: msg.CreatedAt,
-		})
+		}))
 		return
 	}
 
@@ -297,9 +319,9 @@ func (h *ClientHandler) sendChatMessageForPeer(w http.ResponseWriter, r *http.Re
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(messageView{
+		json.NewEncoder(w).Encode(h.messageViewWithSender(r.Context(), userID, messageView{
 			ID: tm.ID, Text: tm.Text, ImageURL: tm.ImageURL, FromMe: true, CreatedAt: tm.CreatedAt,
-		})
+		}))
 		return
 	}
 
@@ -320,7 +342,7 @@ func (h *ClientHandler) sendChatMessageForPeer(w http.ResponseWriter, r *http.Re
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(messageView{
+	json.NewEncoder(w).Encode(h.messageViewWithSender(r.Context(), userID, messageView{
 		ID: dm.ID, Text: dm.Text, ImageURL: dm.ImageURL, FromMe: true, CreatedAt: dm.CreatedAt,
-	})
+	}))
 }
