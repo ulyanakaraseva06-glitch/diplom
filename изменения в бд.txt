@@ -9,3 +9,20 @@ ALTER TABLE tournaments ADD COLUMN banner_url VARCHAR(500) DEFAULT NULL;
 
 
 ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE;
+
+добавить в постгресс 20.05 3.20
+CREATE TABLE calendar_events (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    all_day BOOLEAN DEFAULT FALSE,
+    event_type VARCHAR(50) DEFAULT 'note',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_calendar_events_user_id ON calendar_events(user_id);
+CREATE INDEX idx_calendar_events_start_date ON calendar_events(start_date);

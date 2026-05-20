@@ -5,6 +5,7 @@ import { registrationsApi } from '../api/registrations';
 import { usersApi } from '../api/users';
 import { supportApi } from '../api/support';
 import { apiClient } from '../api/client';
+import EventCalendar from '../components/EventCalendar';
 import {
   Container,
   Typography,
@@ -86,7 +87,12 @@ const loadStats = async () => {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Административная панель
+                    <Box
+  component="img"
+  src="/images/adminn.png"
+  alt="Логотип"
+  sx={{ height: 110 }}
+/>
           </Typography>
           <Typography variant="body2" sx={{ mr: 2 }}>
             {user?.username} ({user?.role === 'manager' ? 'Менеджер' : user?.role === 'organizer' ? 'Организатор' : 'Игрок'})
@@ -149,7 +155,9 @@ const loadStats = async () => {
               </Paper>
             </Grid>
           </Grid>
-
+          <Box sx={{ mb: 4, height: 600, overflow: 'auto' }}>
+            <EventCalendar />
+             </Box>
           {/* Карточки навигации */}
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 4 }}>

@@ -333,3 +333,36 @@ func (r *TournamentRepository) Approve(ctx context.Context, id int, managerID in
 
     return nil
 }
+// ListByOrganizer - список турниров организатора
+func (r *TournamentRepository) ListByOrganizer(ctx context.Context, organizerID int) ([]*models.Tournament, error) {
+    query := `
+        SELECT id, title, game, description, start_date, registration_deadline, entry_fee, prize_pool, max_teams, status, organizer_id, is_vip, banner_url, created_at, updated_at
+        FROM tournaments
+        WHERE organizer_id = $1
+        ORDER BY start_date
+    `
+
+    rows, err := r.db.Pool.Query(ctx, query, organizerID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list tournaments by organizer: %w", err)
+    }
+    defer rows.Close()
+
+    var tournaments []*models.Tournament
+    for rows.Next() {
+        var t models.Tournament
+        err := rows.Scan(
+            &t.ID, &t.Title, &t.Game, &t.Description,
+            &t.StartDate, &t.RegistrationDeadline,
+            &t.EntryFee, &t.PrizePool, &t.MaxTeams,
+            &t.Status, &t.OrganizerID,
+            &t.IsVIP, &t.BannerURL,
+            &t.CreatedAt, &t.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan tournament: %w", err)
+        }
+        tournaments = append(tournaments, &t)
+    }
+    return tournaments, nil
+}
