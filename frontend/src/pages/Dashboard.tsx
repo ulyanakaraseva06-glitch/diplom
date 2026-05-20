@@ -85,7 +85,12 @@ const loadStats = async () => {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Административная панель
+                    <Box
+  component="img"
+  src="/images/adminn.png"
+  alt="Логотип"
+  sx={{ height: 110 }}
+/>
           </Typography>
           <Typography variant="body2" sx={{ mr: 2 }}>
             {user?.username} ({user?.role === 'manager' ? 'Менеджер' : user?.role === 'organizer' ? 'Организатор' : 'Игрок'})
