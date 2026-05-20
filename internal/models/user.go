@@ -34,12 +34,13 @@ type UserLogin struct {
 }
 
 type UserResponse struct {
-    ID        int       `json:"id"`
-    Email     string    `json:"email"`
-    Username  string    `json:"username"`
-    Role      UserRole  `json:"role"`
-    AvatarURL string    `json:"avatar_url,omitempty"`
-    CreatedAt time.Time `json:"created_at"`
+    ID              int       `json:"id"`
+    Email           string    `json:"email"`
+    Username        string    `json:"username"`
+    Role            UserRole  `json:"role"`
+    AvatarURL       string    `json:"avatar_url,omitempty"`
+    HasSubscription bool      `json:"has_subscription"`
+    CreatedAt       time.Time `json:"created_at"`
 }
 
 func (u *User) ToResponse() *UserResponse {

@@ -10,8 +10,8 @@ import (
 	"esports-manager/internal/middleware"
 	"esports-manager/internal/models"
 
+	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -23,21 +23,37 @@ func (h *ClientHandler) GetWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance := 0.0
-	if h.mongoDB != nil {
-		balance = h.getUserBalance(r.Context(), userID)
-	}
+	balance := h.walletBalance(r.Context(), userID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]float64{"balance": balance})
 }
 
 func (h *ClientHandler) getUserBalance(ctx context.Context, userID int) float64 {
-	var u models.UserMongo
-	err := h.mongoDB.Collection("users").FindOne(ctx, bson.M{"id": userID}).Decode(&u)
+	if h.mongoDB == nil {
+		return 0
+	}
+	// Только balance: полный UserMongo может не декодироваться (game как string вместо []string).
+	var doc bson.M
+	err := h.mongoDB.Collection("users").FindOne(
+		ctx,
+		bson.M{"id": userID},
+		options.FindOne().SetProjection(bson.M{"balance": 1, "_id": 0}),
+	).Decode(&doc)
 	if err != nil {
 		return 0
 	}
-	return u.Balance
+	switch v := doc["balance"].(type) {
+	case float64:
+		return v
+	case int32:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case int:
+		return float64(v)
+	default:
+		return 0
+	}
 }
 
 func (h *ClientHandler) setUserBalance(ctx context.Context, userID int, balance float64) error {
@@ -53,14 +69,18 @@ func (h *ClientHandler) setUserBalance(ctx context.Context, userID int, balance 
 	return err
 }
 
-// DepositWallet — пополнение кошелька
+// DepositWallet — устаревшее мгновенное пополнение (оставлено для совместимости).
 func (h *ClientHandler) DepositWallet(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "Use POST /api/client/wallet/deposit/create for QR payment", http.StatusGone)
+}
+
+// CreateWalletDeposit — создать заявку на пополнение и вернуть payload для QR.
+func (h *ClientHandler) CreateWalletDeposit(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
 	var req struct {
 		Amount float64 `json:"amount"`
 	}
@@ -73,81 +93,114 @@ func (h *ClientHandler) DepositWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	balance := h.getUserBalance(r.Context(), userID) + req.Amount
-	if err := h.setUserBalance(r.Context(), userID, balance); err != nil {
-		http.Error(w, "Failed to deposit", http.StatusInternalServerError)
+	depositID := newDepositID()
+	purpose := fmt.Sprintf("Пополнение GAMER.OK user#%d id:%s", userID, depositID)
+	cfg := loadSBPReceiverConfig()
+	qrPayload := buildSBPPayload(cfg, req.Amount, purpose)
+
+	dep := models.WalletDeposit{
+		ID:        depositID,
+		UserID:    userID,
+		Amount:    req.Amount,
+		Status:    models.WalletDepositPending,
+		Purpose:   purpose,
+		QRPayload: qrPayload,
+		CreatedAt: time.Now(),
+	}
+	if err := h.walletSaveDeposit(r.Context(), dep); err != nil {
+		http.Error(w, "Failed to create deposit", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]float64{"balance": balance})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"deposit_id": depositID,
+		"amount":     req.Amount,
+		"status":     dep.Status,
+		"purpose":    purpose,
+	})
 }
 
-// SubscribeWithBalance — оплата подписки с кошелька
-func (h *ClientHandler) SubscribeWithBalance(w http.ResponseWriter, r *http.Request) {
+// GetWalletDepositStatus — статус заявки на пополнение.
+func (h *ClientHandler) GetWalletDepositStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	var req struct {
-		SubscriptionID string `json:"subscription_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-
-	var subscription models.Subscription
-	err := h.mongoDB.Collection("subscriptions").FindOne(r.Context(), bson.M{"id": req.SubscriptionID}).Decode(&subscription)
-	if err == mongo.ErrNoDocuments {
-		http.Error(w, "Subscription not found", http.StatusNotFound)
-		return
-	}
+	depositID := mux.Vars(r)["id"]
+	dep, err := h.walletGetDeposit(r.Context(), depositID, userID)
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		http.Error(w, "Deposit not found", http.StatusNotFound)
 		return
 	}
 
-	balance := h.getUserBalance(r.Context(), userID)
-	price := float64(subscription.Price)
-	if balance < price {
-		http.Error(w, "Insufficient balance", http.StatusPaymentRequired)
-		return
+	resp := map[string]interface{}{
+		"deposit_id": dep.ID,
+		"amount":     dep.Amount,
+		"status":     dep.Status,
+		"qr_payload": dep.QRPayload,
+		"purpose":    dep.Purpose,
 	}
-
-	if err := h.setUserBalance(r.Context(), userID, balance-price); err != nil {
-		http.Error(w, "Failed to deduct balance", http.StatusInternalServerError)
-		return
+	if dep.Status == models.WalletDepositPaid {
+		resp["balance"] = h.walletBalance(r.Context(), userID)
 	}
-
-	_, _ = h.mongoDB.Collection("user_subscriptions").UpdateMany(
-		r.Context(),
-		bson.M{"user_id": userID, "is_active": true},
-		bson.M{"$set": bson.M{"is_active": false}},
-	)
-
-	userSub := models.UserSubscription{
-		ID: newMongoID(), UserID: userID, SubscriptionID: req.SubscriptionID,
-		StartDate: time.Now(), EndDate: time.Now().AddDate(0, 1, 0),
-		IsActive: true, AutoRenew: false,
-	}
-	if _, err := h.mongoDB.Collection("user_subscriptions").InsertOne(r.Context(), userSub); err != nil {
-		http.Error(w, "Failed to create subscription", http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":      "Subscribed successfully",
-		"balance":      balance - price,
-		"subscription": userSub,
-	})
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
-// HasActiveSubscription — проверка активной подписки
-func (h *ClientHandler) HasActiveSubscription(ctx context.Context, userID int) bool {
-	count, err := h.mongoDB.Collection("user_subscriptions").CountDocuments(ctx, bson.M{
-		"user_id": userID, "is_active": true,
+// ConfirmWalletDeposit — пользователь нажал «Я оплатил», заявка уходит на проверку админу.
+func (h *ClientHandler) ConfirmWalletDeposit(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	depositID := mux.Vars(r)["id"]
+
+	dep, err := h.walletGetDeposit(r.Context(), depositID, userID)
+	if err != nil {
+		http.Error(w, "Deposit not found", http.StatusNotFound)
+		return
+	}
+
+	if dep.Status == models.WalletDepositPaid {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deposit_id": dep.ID,
+			"status":     dep.Status,
+			"balance":    h.walletBalance(r.Context(), userID),
+			"message":    "Уже зачислено",
+		})
+		return
+	}
+	if dep.Status == models.WalletDepositReview {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deposit_id": depositID,
+			"status":     models.WalletDepositReview,
+			"message":    "Заявка уже на проверке",
+		})
+		return
+	}
+	if dep.Status == models.WalletDepositRejected {
+		http.Error(w, "Заявка отклонена", http.StatusBadRequest)
+		return
+	}
+	if dep.Status != models.WalletDepositPending {
+		http.Error(w, "Некорректный статус заявки", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.walletUpdateDepositStatus(r.Context(), depositID, models.WalletDepositPending, models.WalletDepositReview, nil); err != nil {
+		http.Error(w, "Failed to submit deposit", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"deposit_id": depositID,
+		"status":     models.WalletDepositReview,
+		"message":    "Заявка отправлена на проверку администратору",
 	})
-	return err == nil && count > 0
 }

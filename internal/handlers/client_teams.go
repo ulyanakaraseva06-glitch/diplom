@@ -17,10 +17,11 @@ import (
 )
 
 type teamMemberView struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	AvatarURL string `json:"avatar_url"`
-	IsLeader  bool   `json:"is_leader"`
+	ID              int    `json:"id"`
+	Username        string `json:"username"`
+	AvatarURL       string `json:"avatar_url"`
+	IsLeader        bool   `json:"is_leader"`
+	HasSubscription bool   `json:"has_subscription"`
 }
 
 type teamView struct {
@@ -59,6 +60,9 @@ func (h *ClientHandler) findTeamByID(ctx context.Context, teamID string) (*model
 }
 
 func (h *ClientHandler) isTeamMember(t *models.TeamMongo, userID int) bool {
+	if t.LeaderID == userID {
+		return true
+	}
 	for _, id := range t.MemberIDs {
 		if id == userID {
 			return true
@@ -68,8 +72,11 @@ func (h *ClientHandler) isTeamMember(t *models.TeamMongo, userID int) bool {
 }
 
 func (h *ClientHandler) teamToView(ctx context.Context, t *models.TeamMongo, userID int) teamView {
-	members := make([]teamMemberView, 0, len(t.MemberIDs))
-	for _, mid := range t.MemberIDs {
+	h.ensureTeamSubscriptionsForTeam(ctx, t.ID)
+	memberIDs := teamMemberIDs(t)
+	subMap := h.subscriptionStatusMap(ctx, memberIDs)
+	members := make([]teamMemberView, 0, len(memberIDs))
+	for _, mid := range memberIDs {
 		u, _ := h.userRepo.FindByID(ctx, mid)
 		if u == nil {
 			continue
@@ -77,6 +84,7 @@ func (h *ClientHandler) teamToView(ctx context.Context, t *models.TeamMongo, use
 		avatar := h.mongoAvatarURL(ctx, mid)
 		members = append(members, teamMemberView{
 			ID: mid, Username: u.Username, AvatarURL: avatar, IsLeader: mid == t.LeaderID,
+			HasSubscription: subMap[mid],
 		})
 	}
 	return teamView{
@@ -226,6 +234,8 @@ func (h *ClientHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	oldMembers := append([]int(nil), team.MemberIDs...)
+
 	friends := h.getFriendIDSet(r.Context(), userID)
 	members := []int{userID}
 	seen := map[int]bool{userID: true}
@@ -262,6 +272,8 @@ func (h *ClientHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		team.AvatarURL = req.AvatarURL
 	}
 	team.MemberIDs = members
+	h.syncTeamSubscriptionMembers(r.Context(), teamID, oldMembers, members)
+
 	updated, err := h.findTeamByID(r.Context(), teamID)
 	if err != nil {
 		http.Error(w, "Failed to load team", http.StatusInternalServerError)

@@ -129,6 +129,9 @@ func main() {
     // Кошелёк
     api.HandleFunc("/client/wallet", clientHandler.GetWallet).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/wallet/deposit", clientHandler.DepositWallet).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/wallet/deposit/create", clientHandler.CreateWalletDeposit).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/wallet/deposit/{id}/status", clientHandler.GetWalletDepositStatus).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/wallet/deposit/{id}/confirm", clientHandler.ConfirmWalletDeposit).Methods("POST", "OPTIONS")
     api.HandleFunc("/subscriptions/pay", clientHandler.SubscribeWithBalance).Methods("POST", "OPTIONS")
 
     // Загрузка файлов
@@ -191,6 +194,9 @@ func main() {
     admin.HandleFunc("/bans", banHandler.CreateBan).Methods("POST", "OPTIONS")
     admin.HandleFunc("/bans/{user_id:[0-9]+}", banHandler.RemoveBan).Methods("DELETE", "OPTIONS")
     admin.HandleFunc("/bans/{user_id:[0-9]+}", banHandler.GetActiveBan).Methods("GET", "OPTIONS")
+    admin.HandleFunc("/wallet-deposits", clientHandler.ListWalletDepositsAdmin).Methods("GET", "OPTIONS")
+    admin.HandleFunc("/wallet-deposits/{id}/approve", clientHandler.ApproveWalletDepositAdmin).Methods("POST", "OPTIONS")
+    admin.HandleFunc("/wallet-deposits/{id}/reject", clientHandler.RejectWalletDepositAdmin).Methods("POST", "OPTIONS")
 
     // Запуск сервера
     port := "8080"

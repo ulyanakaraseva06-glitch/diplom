@@ -383,39 +383,7 @@ func (h *ClientHandler) GetSubscriptions(w http.ResponseWriter, r *http.Request)
     json.NewEncoder(w).Encode(subscriptions)
 }
 
-// GetUserSubscription - получить подписку пользователя
-func (h *ClientHandler) GetUserSubscription(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    w.Header().Set("Content-Type", "application/json")
-    if h.mongoDB == nil {
-        w.Write([]byte("null"))
-        return
-    }
-
-    var userSub models.UserSubscription
-    err := h.mongoDB.Collection("user_subscriptions").FindOne(r.Context(), bson.M{
-        "user_id": userID,
-        "is_active": true,
-    }).Decode(&userSub)
-    if err == mongo.ErrNoDocuments {
-        w.Write([]byte("null"))
-        return
-    }
-    if err != nil {
-        http.Error(w, "Database error", http.StatusInternalServerError)
-        return
-    }
-
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(userSub)
-}
-
-// Subscribe - оформление подписки
+// Subscribe - оформление подписки (без оплаты, устаревший демо-маршрут)
 func (h *ClientHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
     userID, ok := middleware.GetUserID(r.Context())
     if !ok {
@@ -442,7 +410,7 @@ func (h *ClientHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
     // Деактивируем старые подписки пользователя
     _, err = h.mongoDB.Collection("user_subscriptions").UpdateMany(
         r.Context(),
-        bson.M{"user_id": userID, "is_active": true},
+        bson.M{"user_id": userID, "is_active": true, "source": "self"},
         bson.M{"$set": bson.M{"is_active": false}},
     )
     if err != nil {
@@ -454,8 +422,10 @@ func (h *ClientHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
         ID:             generateID(),
         UserID:         userID,
         SubscriptionID: req.SubscriptionID,
+        Source:         "self",
+        TeamID:         "",
         StartDate:      time.Now(),
-        EndDate:        time.Now().AddDate(0, 1, 0), // на 1 месяц
+        EndDate:        time.Now().AddDate(0, 1, 0),
         IsActive:       true,
         AutoRenew:      false,
     }
@@ -468,27 +438,6 @@ func (h *ClientHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(map[string]string{"message": "Subscribed successfully"})
-}
-
-// CancelSubscription - отмена подписки
-func (h *ClientHandler) CancelSubscription(w http.ResponseWriter, r *http.Request) {
-    userID, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "Unauthorized", http.StatusUnauthorized)
-        return
-    }
-
-    _, err := h.mongoDB.Collection("user_subscriptions").UpdateOne(
-        r.Context(),
-        bson.M{"user_id": userID, "is_active": true},
-        bson.M{"$set": bson.M{"is_active": false, "auto_renew": false}},
-    )
-    if err != nil {
-        http.Error(w, "Failed to cancel subscription", http.StatusInternalServerError)
-        return
-    }
-
-    json.NewEncoder(w).Encode(map[string]string{"message": "Subscription cancelled"})
 }
 
 func generateID() string {

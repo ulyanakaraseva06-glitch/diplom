@@ -20,6 +20,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import NavBar from '../components/NavBar';
+import UsernameWithBadge from '../components/UsernameWithBadge';
 import { clientApi, GameCard } from '../api/clientApi';
 import { mediaUrl } from '../utils/media';
 
@@ -80,11 +81,15 @@ const Profile: React.FC = () => {
         const meRes = await fetch(`${API}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (meRes.ok) {
+          if (meRes.ok) {
           const me = await meRes.json();
           loadedEmail = me.email ?? loadedEmail;
           setEmail(loadedEmail);
           setUsername(me.username ?? '');
+          if (me.has_subscription) {
+            setHasSubscription(true);
+            updateUser({ has_subscription: true });
+          }
           if (me.avatar_url) {
             setAvatarUrl(me.avatar_url);
             updateUser({ avatar_url: me.avatar_url });
@@ -98,8 +103,11 @@ const Profile: React.FC = () => {
       }
 
       try {
-        const sub = await clientApi.getMySubscription();
-        setHasSubscription(!!sub && sub.is_active);
+        const subs = await clientApi.getMySubscriptions();
+        setHasSubscription(subs.has_active);
+        if (subs.has_active) {
+          updateUser({ has_subscription: true });
+        }
       } catch {
         /* подписка необязательна для отображения профиля */
       }
@@ -124,7 +132,7 @@ const Profile: React.FC = () => {
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      updateUser({ username: data.username });
+      updateUser({ username: data.username, has_subscription: hasSubscription });
       setSnack('Никнейм обновлён');
     } catch {
       setSnack('Не удалось сохранить никнейм');
@@ -233,6 +241,9 @@ const Profile: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
                 JPG, PNG — до 5 МБ
               </Typography>
+              <Box sx={{ mt: 1 }}>
+                <UsernameWithBadge username={username} hasSubscription={hasSubscription} variant="h6" />
+              </Box>
             </Box>
 
             <Grid container spacing={3}>

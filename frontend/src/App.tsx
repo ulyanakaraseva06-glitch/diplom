@@ -21,6 +21,7 @@ import Subscription from './pages/Subscription';
 import Friends from './pages/Friends';
 import Themes from './pages/Themes';
 import Wallet from './pages/Wallet';
+import WalletPayments from './pages/WalletPayments';
 
 const queryClient = new QueryClient();
 
@@ -161,6 +162,12 @@ function AppRoutes() {
       <Route path="/support" element={
         <AdminRoute>
           <Support />
+        </AdminRoute>
+      } />
+
+      <Route path="/wallet-payments" element={
+        <AdminRoute>
+          <WalletPayments />
         </AdminRoute>
       } />
     </Routes>

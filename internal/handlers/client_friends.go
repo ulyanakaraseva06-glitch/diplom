@@ -14,13 +14,15 @@ import (
 )
 
 type friendUserView struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	AvatarURL string `json:"avatar_url"`
+	ID              int    `json:"id"`
+	Username        string `json:"username"`
+	Email           string `json:"email"`
+	AvatarURL       string `json:"avatar_url"`
+	HasSubscription bool   `json:"has_subscription"`
 }
 
 func (h *ClientHandler) enrichUsers(ctx context.Context, ids []int) []friendUserView {
+	subMap := h.subscriptionStatusMap(ctx, ids)
 	result := make([]friendUserView, 0, len(ids))
 	for _, id := range ids {
 		u, err := h.userRepo.FindByID(ctx, id)
@@ -33,6 +35,7 @@ func (h *ClientHandler) enrichUsers(ctx context.Context, ids []int) []friendUser
 		}
 		result = append(result, friendUserView{
 			ID: id, Username: u.Username, Email: u.Email, AvatarURL: avatar,
+			HasSubscription: subMap[id],
 		})
 	}
 	return result
@@ -61,6 +64,12 @@ func (h *ClientHandler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"` // none, friend, sent, incoming
 	}
 
+	ids := make([]int, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	subMap := h.subscriptionStatusMap(r.Context(), ids)
+
 	var out []playerView
 	for _, u := range users {
 		avatar := ""
@@ -78,6 +87,7 @@ func (h *ClientHandler) ListPlayers(w http.ResponseWriter, r *http.Request) {
 		out = append(out, playerView{
 			friendUserView: friendUserView{
 				ID: u.ID, Username: u.Username, Email: u.Email, AvatarURL: avatar,
+				HasSubscription: subMap[u.ID],
 			},
 			Status: status,
 		})

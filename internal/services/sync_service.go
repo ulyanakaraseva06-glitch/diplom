@@ -10,6 +10,7 @@ import (
     "esports-manager/internal/repository"
     "go.mongodb.org/mongo-driver/bson"
     "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type SyncService struct {
@@ -38,8 +39,14 @@ func (s *SyncService) SyncUser(ctx context.Context, user *models.User) error {
         return nil
     }
 
-    var existing models.UserMongo
-    err := s.mongoUsers.FindOne(ctx, bson.M{"id": user.ID}).Decode(&existing)
+    var existing struct {
+        ID int `bson:"id"`
+    }
+    err := s.mongoUsers.FindOne(
+        ctx,
+        bson.M{"id": user.ID},
+        options.FindOne().SetProjection(bson.M{"id": 1}),
+    ).Decode(&existing)
     if err == nil {
         return nil
     }

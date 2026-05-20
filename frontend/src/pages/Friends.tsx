@@ -41,6 +41,8 @@ import ChatIcon from '@mui/icons-material/Chat';
 import EditIcon from '@mui/icons-material/Edit';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import NavBar from '../components/NavBar';
+import UsernameWithBadge from '../components/UsernameWithBadge';
+import BoltIcon from '@mui/icons-material/Bolt';
 import UserProfileDialog from '../components/UserProfileDialog';
 import { clientApi, PlayerUser, FriendRequestItem, Team, PublicProfile } from '../api/clientApi';
 import { mediaUrl } from '../utils/media';
@@ -97,8 +99,14 @@ const Friends: React.FC = () => {
 
   useEffect(() => {
     clientApi.getNotifications().then((list) => {
-      const unread = list.find((n: any) => !n.is_read && n.type === 'friend_request');
-      if (unread) setSnack(unread.body);
+      const unread = list.find(
+        (n: { is_read: boolean; type: string }) =>
+          !n.is_read &&
+          (n.type === 'friend_request' ||
+            n.type === 'wallet_deposit_rejected' ||
+            n.type === 'wallet_deposit_approved')
+      );
+      if (unread) setSnack(unread.body || unread.title);
     }).catch(() => {});
   }, []);
 
@@ -231,7 +239,7 @@ const Friends: React.FC = () => {
         >
           <PersonIcon />
         </Avatar>
-        <Typography variant="h6">{u.username}</Typography>
+        <UsernameWithBadge username={u.username} hasSubscription={u.has_subscription} variant="h6" />
         <Box sx={{ mt: 2 }} onClick={(e) => e.stopPropagation()}>
           {actions}
         </Box>
@@ -417,7 +425,14 @@ const Friends: React.FC = () => {
                                   key={m.id}
                                   size="small"
                                   avatar={<Avatar src={mediaUrl(m.avatar_url)} />}
-                                  label={m.is_leader ? `${m.username} (лидер)` : m.username}
+                                  label={
+                                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                                      {m.is_leader ? `${m.username} (лидер)` : m.username}
+                                      {m.has_subscription && (
+                                        <BoltIcon sx={{ fontSize: 14, color: '#FFC107' }} />
+                                      )}
+                                    </Box>
+                                  }
                                 />
                               ))}
                             </Box>
@@ -534,7 +549,14 @@ const Friends: React.FC = () => {
                   <ListItemAvatar>
                     <Avatar src={mediaUrl(f.avatar_url)}>{f.username[0]}</Avatar>
                   </ListItemAvatar>
-                  <ListItemText primary={f.username} />
+                  <ListItemText
+                    primary={
+                      <UsernameWithBadge
+                        username={f.username}
+                        hasSubscription={f.has_subscription}
+                      />
+                    }
+                  />
                 </ListItemButton>
               </ListItem>
             ))}

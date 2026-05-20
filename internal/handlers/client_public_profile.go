@@ -12,10 +12,11 @@ import (
 )
 
 type publicProfileView struct {
-	ID        int               `json:"id"`
-	Username  string            `json:"username"`
-	AvatarURL string            `json:"avatar_url"`
-	GameCards []models.GameCard `json:"game_cards"`
+	ID              int               `json:"id"`
+	Username        string            `json:"username"`
+	AvatarURL       string            `json:"avatar_url"`
+	HasSubscription bool              `json:"has_subscription"`
+	GameCards       []models.GameCard `json:"game_cards"`
 }
 
 // GetPublicProfile — профиль игрока для друзей (никнейм, аватар, карточки игр)
@@ -45,6 +46,7 @@ func (h *ClientHandler) GetPublicProfile(w http.ResponseWriter, r *http.Request)
 
 	view := publicProfileView{
 		ID: targetID, Username: u.Username, GameCards: []models.GameCard{},
+		HasSubscription: h.HasActiveSubscription(r.Context(), targetID),
 	}
 
 	if h.mongoDB != nil {

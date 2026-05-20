@@ -41,14 +41,14 @@ const RegisterTournamentDialog: React.FC<Props> = ({
     setTeamId('');
     (async () => {
       try {
-        const [teamsList, sub] = await Promise.all([
+        const [teamsList, subs] = await Promise.all([
           clientApi.getTeams(),
-          clientApi.getMySubscription(),
+          clientApi.getMySubscriptions(),
         ]);
         const leaderTeams = teamsList.filter((t) => t.is_leader);
         setTeams(leaderTeams);
         if (leaderTeams.length === 1) setTeamId(leaderTeams[0].id);
-        setHasSubscription(!!sub?.is_active);
+        setHasSubscription(subs.has_active);
       } catch {
         setTeams([]);
       }

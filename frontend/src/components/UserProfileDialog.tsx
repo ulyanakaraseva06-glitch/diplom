@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { PublicProfile } from '../api/clientApi';
 import { mediaUrl } from '../utils/media';
+import UsernameWithBadge from './UsernameWithBadge';
 
 interface Props {
   open: boolean;
@@ -35,7 +36,11 @@ const UserProfileDialog: React.FC<Props> = ({ open, profile, loading, onClose })
             <Avatar src={mediaUrl(profile.avatar_url)} sx={{ width: 96, height: 96, mb: 1 }}>
               {profile.username?.[0]?.toUpperCase()}
             </Avatar>
-            <Typography variant="h6">{profile.username}</Typography>
+            <UsernameWithBadge
+              username={profile.username}
+              hasSubscription={profile.has_subscription}
+              variant="h6"
+            />
           </Box>
           {profile.game_cards?.length ? (
             profile.game_cards.map((card, i) => (

@@ -6,6 +6,7 @@ export interface User {
   role: 'user' | 'organizer' | 'manager';
   created_at: string;
   avatar_url?: string;
+  has_subscription?: boolean;
 }
 
 // Авторизация

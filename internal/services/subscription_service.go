@@ -64,6 +64,13 @@ func (s *SubscriptionService) InitSubscriptions(ctx context.Context) error {
             if err != nil {
                 log.Printf("Failed to insert subscription %s: %v", sub.ID, err)
             }
+            continue
+        }
+        if err == nil && existing.TargetType != sub.TargetType {
+            _, _ = s.mongoDB.Collection("subscriptions").UpdateOne(ctx,
+                bson.M{"id": sub.ID},
+                bson.M{"$set": bson.M{"target_type": sub.TargetType, "name": sub.Name, "price": sub.Price, "benefits": sub.Benefits}},
+            )
         }
     }
 

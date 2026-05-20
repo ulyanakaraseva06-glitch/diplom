@@ -1,12 +1,23 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"time"
 )
 
 func newMongoID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// newDepositID — короткий id без потери точности в JavaScript (UnixNano > 2^53).
+func newDepositID() string {
+	b := make([]byte, 12)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixMilli())
+	}
+	return hex.EncodeToString(b)
 }
 
 func bsonInt(v interface{}) int {

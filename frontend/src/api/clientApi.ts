@@ -21,6 +21,17 @@ async function handleJsonArray<T>(res: Response): Promise<T[]> {
   return Array.isArray(data) ? data : [];
 }
 
+export interface WalletDepositAdminItem {
+  id: string;
+  user_id: number;
+  username: string;
+  email: string;
+  amount: number;
+  status: string;
+  purpose: string;
+  created_at: string;
+}
+
 export interface GameCard {
   id: string;
   game: string;
@@ -34,6 +45,7 @@ export interface PlayerUser {
   email: string;
   avatar_url: string;
   status?: string;
+  has_subscription?: boolean;
 }
 
 export interface FriendRequestItem {
@@ -58,6 +70,7 @@ export interface PublicProfile {
   id: number;
   username: string;
   avatar_url: string;
+  has_subscription?: boolean;
   game_cards: GameCard[];
 }
 
@@ -66,6 +79,7 @@ export interface TeamMember {
   username: string;
   avatar_url: string;
   is_leader: boolean;
+  has_subscription?: boolean;
 }
 
 export interface Team {
@@ -138,7 +152,30 @@ export interface UserSubscription {
   id: string;
   user_id: number;
   subscription_id: string;
+  team_id?: string;
+  source?: string;
+  start_date?: string;
+  end_date?: string;
   is_active: boolean;
+  auto_renew?: boolean;
+  subscription_name?: string;
+  target_type?: string;
+  team_name?: string;
+  can_cancel?: boolean;
+}
+
+export interface MySubscriptionsResponse {
+  subscriptions: UserSubscription[];
+  has_personal: boolean;
+  has_team: boolean;
+  has_active: boolean;
+}
+
+function isSubscriptionActive(sub: UserSubscription | null | undefined): boolean {
+  if (!sub) return false;
+  if (sub.is_active === false) return false;
+  if (!sub.end_date) return true;
+  return new Date(sub.end_date) > new Date();
 }
 
 export const clientApi = {
@@ -182,19 +219,114 @@ export const clientApi = {
       body: JSON.stringify({ amount }),
     }).then(handleJson<{ balance: number }>),
 
-  paySubscription: (subscription_id: string) =>
+  createWalletDeposit: (amount: number) =>
+    fetch(`${API}/client/wallet/deposit/create`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ amount }),
+    }).then(
+      handleJson<{
+        deposit_id: string;
+        amount: number;
+        status: string;
+        purpose: string;
+      }>
+    ),
+
+  getWalletDepositStatus: (depositId: string) =>
+    fetch(`${API}/client/wallet/deposit/${encodeURIComponent(depositId)}/status`, {
+      headers: authHeaders(),
+    }).then(
+      handleJson<{
+        deposit_id: string;
+        amount: number;
+        status: string;
+        qr_payload: string;
+        purpose: string;
+        balance?: number;
+      }>
+    ),
+
+  confirmWalletDeposit: (depositId: string) =>
+    fetch(`${API}/client/wallet/deposit/${encodeURIComponent(depositId)}/confirm`, {
+      method: 'POST',
+      headers: authHeaders(),
+    }).then(
+      handleJson<{
+        deposit_id: string;
+        status: string;
+        message: string;
+        balance?: number;
+      }>
+    ),
+
+  listWalletDepositsAdmin: () =>
+    fetch(`${API}/admin/wallet-deposits`, { headers: authHeaders() }).then(
+      handleJson<WalletDepositAdminItem[]>
+    ),
+
+  approveWalletDepositAdmin: (depositId: string) =>
+    fetch(`${API}/admin/wallet-deposits/${encodeURIComponent(depositId)}/approve`, {
+      method: 'POST',
+      headers: authHeaders(),
+    }).then(handleJson<{ message: string }>),
+
+  rejectWalletDepositAdmin: (depositId: string) =>
+    fetch(`${API}/admin/wallet-deposits/${encodeURIComponent(depositId)}/reject`, {
+      method: 'POST',
+      headers: authHeaders(),
+    }).then(handleJson<{ message: string }>),
+
+  paySubscription: (subscription_id: string, team_id?: string) =>
     fetch(`${API}/subscriptions/pay`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ subscription_id }),
-    }).then(handleJson<any>),
+      body: JSON.stringify({ subscription_id, team_id: team_id || undefined }),
+    }).then(
+      handleJson<{
+        message: string;
+        balance: number;
+        subscription: UserSubscription;
+        subscriptions?: UserSubscription[];
+        has_personal?: boolean;
+        has_team?: boolean;
+        has_active?: boolean;
+      }>
+    ),
 
-  getMySubscription: async (): Promise<UserSubscription | null> => {
+  getMySubscriptions: async (): Promise<MySubscriptionsResponse> => {
+    const empty: MySubscriptionsResponse = {
+      subscriptions: [],
+      has_personal: false,
+      has_team: false,
+      has_active: false,
+    };
     const res = await fetch(`${API}/subscriptions/my`, { headers: authHeaders() });
-    if (!res.ok) return null;
+    if (!res.ok) return empty;
     const text = await res.text();
-    if (!text || text === 'null') return null;
-    return JSON.parse(text) as UserSubscription;
+    if (!text || text === 'null') return empty;
+    const data = JSON.parse(text) as MySubscriptionsResponse | UserSubscription;
+    if (Array.isArray((data as MySubscriptionsResponse).subscriptions)) {
+      return data as MySubscriptionsResponse;
+    }
+    const legacy = data as UserSubscription;
+    if (!legacy.id && !legacy.subscription_id) return empty;
+    const active = isSubscriptionActive(legacy);
+    const isTeam =
+      legacy.source === 'team' || !!legacy.team_id || legacy.target_type === 'team' || legacy.subscription_id === 'sub_team';
+    return {
+      subscriptions: active ? [legacy] : [],
+      has_personal: active && !isTeam,
+      has_team: active && isTeam,
+      has_active: active,
+    };
+  },
+
+  /** Первая активная подписка (для обратной совместимости). */
+  getMySubscription: async (): Promise<UserSubscription | null> => {
+    const { subscriptions, has_active } = await clientApi.getMySubscriptions();
+    if (!has_active || subscriptions.length === 0) return null;
+    return subscriptions[0];
   },
 
   searchPlayers: (search: string) =>

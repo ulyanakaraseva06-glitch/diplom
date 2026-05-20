@@ -50,7 +50,7 @@ func (h *AuthHandler) hasActiveSubscription(userID int) bool {
 	}
 	count, err := h.mongoDB.Collection("user_subscriptions").CountDocuments(
 		context.Background(),
-		bson.M{"user_id": userID, "is_active": true},
+		bson.M{"user_id": userID, "is_active": true, "end_date": bson.M{"$gt": time.Now()}},
 	)
 	return err == nil && count > 0
 }
@@ -162,9 +162,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    userResp := user.ToResponse()
+    h.fillSubscriptionFlag(r.Context(), userResp, user.ID)
+
     response := AuthResponse{
         Token: token,
-        User:  user.ToResponse(),
+        User:  userResp,
     }
 
     w.Header().Set("Content-Type", "application/json")
@@ -236,9 +239,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    userResp := user.ToResponse()
+    h.fillSubscriptionFlag(r.Context(), userResp, user.ID)
+
     response := AuthResponse{
         Token: token,
-        User:  user.ToResponse(),
+        User:  userResp,
     }
 
     // Проверяем предупреждение
@@ -307,6 +313,7 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
             resp.AvatarURL = p.AvatarURL
         }
     }
+    h.fillSubscriptionFlag(r.Context(), resp, userID)
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(resp)
@@ -353,5 +360,15 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(user.ToResponse())
+    resp := user.ToResponse()
+    h.fillSubscriptionFlag(r.Context(), resp, userID)
+    json.NewEncoder(w).Encode(resp)
+}
+
+func (h *AuthHandler) fillSubscriptionFlag(ctx context.Context, resp *models.UserResponse, userID int) {
+    if h.mongoDB == nil || resp == nil {
+        return
+    }
+    ch := ClientHandler{mongoDB: h.mongoDB, userRepo: h.userRepo}
+    resp.HasSubscription = ch.HasActiveSubscription(ctx, userID)
 }

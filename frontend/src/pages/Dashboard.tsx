@@ -27,6 +27,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import PeopleIcon from '@mui/icons-material/People';
 import ChatIcon from '@mui/icons-material/Chat';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 const Dashboard: React.FC = () => {
   const { user, isManager, isOrganizer, logout } = useAuth();
@@ -209,6 +210,21 @@ const loadStats = async () => {
                         Общение с пользователями в реальном времени
                       </Typography>
                       <Button variant="contained" color="success" onClick={() => navigate('/support')}>
+                        Перейти
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12, md: 4 }}>
+                  <Card sx={{ height: '100%' }}>
+                    <CardContent>
+                      <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                      <Typography variant="h6">Пополнения кошелька</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Подтверждение оплат по СБП
+                      </Typography>
+                      <Button variant="contained" color="info" onClick={() => navigate('/wallet-payments')}>
                         Перейти
                       </Button>
                     </CardContent>

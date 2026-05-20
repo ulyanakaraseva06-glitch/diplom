@@ -103,6 +103,8 @@ type UserSubscription struct {
 	ID             string    `json:"id" bson:"id"`
 	UserID         int       `json:"user_id" bson:"user_id"`
 	SubscriptionID string    `json:"subscription_id" bson:"subscription_id"`
+	TeamID         string    `json:"team_id,omitempty" bson:"team_id,omitempty"`
+	Source         string    `json:"source" bson:"source"` // self | team
 	StartDate      time.Time `json:"start_date" bson:"start_date"`
 	EndDate        time.Time `json:"end_date" bson:"end_date"`
 	IsActive       bool      `json:"is_active" bson:"is_active"`

@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import UsernameWithBadge from './UsernameWithBadge';
 import { ThemeContext } from '../contexts/ThemeContext';
 import {
   AppBar,
@@ -164,9 +165,13 @@ const NavBar: React.FC = () => {
                   >
                     {user?.username?.[0]?.toUpperCase() || 'U'}
                   </Avatar>
-                  <Typography variant="body2" sx={{ mr: 1 }}>
-                    {user?.username || 'Профиль'}
-                  </Typography>
+                  <Box sx={{ mr: 1 }}>
+                    <UsernameWithBadge
+                      username={user?.username || 'Профиль'}
+                      hasSubscription={user?.has_subscription}
+                      variant="body2"
+                    />
+                  </Box>
                 </Box>
 
                 <Menu
