@@ -33,7 +33,7 @@ func (r *ManagerLogRepository) List(ctx context.Context, limit, offset int) ([]m
     query := `
         SELECT id, manager_id, action, entity_type, entity_id, old_data, new_data, created_at
         FROM manager_logs
-        ORDER BY id DESC
+        ORDER BY id ASC
         LIMIT $1 OFFSET $2
     `
     rows, err := r.db.Pool.Query(ctx, query, limit, offset)

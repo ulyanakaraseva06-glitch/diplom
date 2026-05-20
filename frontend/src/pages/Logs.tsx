@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HomeIcon from '@mui/icons-material/Home';
+import { TablePagination } from '@mui/material';
 
 interface LogEntry {
   id: number;
@@ -38,6 +39,8 @@ const Logs: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+const [rowsPerPage, setRowsPerPage] = useState(10);
 
   useEffect(() => {
     const loadLogs = async () => {
@@ -64,7 +67,14 @@ const Logs: React.FC = () => {
       default: return 'default';
     }
   };
+  const handleChangePage = (event: unknown, newPage: number) => {
+  setPage(newPage);
+};
 
+const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  setRowsPerPage(parseInt(event.target.value, 10));
+  setPage(0);
+};
   const getActionLabel = (action: string) => {
     switch (action) {
       case 'DELETE': return 'Удаление';
@@ -82,7 +92,7 @@ const Logs: React.FC = () => {
       default: return entity;
     }
   };
-
+  const paginatedLogs = logs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '—';
     // Формат: 2026-05-20 07:10:26.732469
@@ -145,7 +155,7 @@ const Logs: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {logs.map((log) => (
+                {paginatedLogs.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell>{log.id}</TableCell>
                     <TableCell>
@@ -170,6 +180,17 @@ const Logs: React.FC = () => {
             </Table>
           </TableContainer>
         )}
+        <TablePagination
+  rowsPerPageOptions={[5, 10, 25, 50, 100]}
+  component="div"
+  count={logs.length}
+  rowsPerPage={rowsPerPage}
+  page={page}
+  onPageChange={handleChangePage}
+  onRowsPerPageChange={handleChangeRowsPerPage}
+  labelRowsPerPage="Записей на странице:"
+  labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
+/>
       </Box>
     </Container>
   );

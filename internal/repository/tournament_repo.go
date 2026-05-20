@@ -370,10 +370,10 @@ func (r *TournamentRepository) ListByOrganizer(ctx context.Context, organizerID 
 func (r *TournamentRepository) CountByMonth(ctx context.Context, year int, month int) (int, error) {
     var count int
     query := `
-        SELECT COUNT(*) FROM tournaments 
-        WHERE EXTRACT(YEAR FROM start_date) = $1 
-          AND EXTRACT(MONTH FROM start_date) = $2
-    `
+    SELECT COUNT(*) FROM tournaments 
+    WHERE EXTRACT(YEAR FROM created_at) = $1 
+      AND EXTRACT(MONTH FROM created_at) = $2
+`
     err := r.db.Pool.QueryRow(ctx, query, year, month).Scan(&count)
     if err != nil {
         return 0, fmt.Errorf("failed to count tournaments by month: %w", err)

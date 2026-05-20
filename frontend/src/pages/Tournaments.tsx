@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { tournamentsApi } from '../api/tournaments';
 import Grid from '@mui/material/Grid';
 import { Tournament, TournamentCreate } from '../types';
+import { TablePagination } from '@mui/material';
 import {
   Container,
   Typography,
@@ -80,7 +81,10 @@ const Tournaments: React.FC = () => {
   const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTournament, setEditingTournament] = useState<Tournament | null>(null);
-  
+
+  // Добавь состояния
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   // Фильтры
   const [filterGame, setFilterGame] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -119,6 +123,15 @@ const Tournaments: React.FC = () => {
     max_teams?: string;
   }>({});
 
+  const handleChangePage = (event: unknown, newPage: number) => {
+  setPage(newPage);
+};
+
+const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  setRowsPerPage(parseInt(event.target.value, 10));
+  setPage(0);
+};
+
   const loadTournaments = useCallback(async () => {
     try {
       setLoading(true);
@@ -147,6 +160,7 @@ const Tournaments: React.FC = () => {
     }
   }, [filterGame, filterStatus, searchTitle]);
 
+  const paginatedTournaments = tournaments.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   const loadUniqueGames = async () => {
     try {
       const response = await tournamentsApi.getAll();
@@ -590,8 +604,8 @@ const uploadBanner = async (file: File): Promise<string> => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {tournaments.map((tournament) => (
-                <TableRow key={tournament.id}>
+              {paginatedTournaments.map((tournament) => (
+              <TableRow key={tournament.id}>
                   <TableCell>{tournament.id}</TableCell>
                   <TableCell>
                     <Button
@@ -635,7 +649,17 @@ const uploadBanner = async (file: File): Promise<string> => {
           </Table>
         </TableContainer>
       )}
-
+      <TablePagination
+  rowsPerPageOptions={[5, 10, 25, 50, 100]}
+  component="div"
+  count={tournaments.length}
+  rowsPerPage={rowsPerPage}
+  page={page}
+  onPageChange={handleChangePage}
+  onRowsPerPageChange={handleChangeRowsPerPage}
+  labelRowsPerPage="Записей на странице:"
+  labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
+/>
       {/* Диалог создания/редактирования турнира */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>

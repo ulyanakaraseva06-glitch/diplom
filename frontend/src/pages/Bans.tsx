@@ -4,6 +4,7 @@ import { bansApi } from '../api/bans';
 import { Ban, BanRequest } from '../types';
 import Papa from 'papaparse';
 import DownloadIcon from '@mui/icons-material/Download';
+import { TablePagination } from '@mui/material';
 import {
   Select,
   MenuItem,
@@ -40,6 +41,9 @@ import {
 
 const Bans: React.FC = () => {
   const { isManager } = useAuth();
+    // Пагинация
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const navigate = useNavigate();
   const [bans, setBans] = useState<Ban[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +114,14 @@ const Bans: React.FC = () => {
       setError(err.response?.data?.message || 'Ошибка разблокировки');
     }
   };
+  const handleChangePage = (event: unknown, newPage: number) => {
+  setPage(newPage);
+};
+
+const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  setRowsPerPage(parseInt(event.target.value, 10));
+  setPage(0);
+};
 
   const handleCreateBan = async () => {
     if (!formData.user_id || !formData.reason) {
@@ -151,7 +163,7 @@ const Bans: React.FC = () => {
       setError(err.response?.data?.message || 'Ошибка создания блокировки');
     }
   };
-
+const paginatedBans = bans.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
  const handleTextFieldChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   const { name, value } = e.target;
   setFormData(prev => ({
@@ -228,7 +240,7 @@ const handleSelectChange = (e: any) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {bans.map((ban) => (
+                {paginatedBans.map((ban) => (
                   <TableRow key={ban.id}>
                     <TableCell>{ban.id}</TableCell>
                     <TableCell>{ban.username || ban.user_id}</TableCell>
@@ -257,6 +269,17 @@ const handleSelectChange = (e: any) => {
             </Table>
           </TableContainer>
         )}
+        <TablePagination
+  rowsPerPageOptions={[5, 10, 25, 50, 100]}
+  component="div"
+  count={bans.length}
+  rowsPerPage={rowsPerPage}
+  page={page}
+  onPageChange={handleChangePage}
+  onRowsPerPageChange={handleChangeRowsPerPage}
+  labelRowsPerPage="Записей на странице:"
+  labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
+/>
       </Box>
 
       {/* Диалог создания блокировки */}
