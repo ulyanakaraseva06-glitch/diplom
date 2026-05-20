@@ -153,9 +153,8 @@ const loadStats = async () => {
               </Paper>
             </Grid>
           </Grid>
-          <Box sx={{ mb: 4, height: 600, overflow: 'auto' }}>
-            <EventCalendar />
-             </Box>
+          
+
           {/* Карточки навигации */}
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 4 }}>
@@ -236,6 +235,9 @@ const loadStats = async () => {
                     </CardContent>
                   </Card>
                 </Grid>
+                <Box sx={{ mb: 6 }}>
+                <EventCalendar />
+              </Box>
               </>
             )}
           </Grid>
