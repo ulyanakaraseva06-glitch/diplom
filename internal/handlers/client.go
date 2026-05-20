@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,28 +16,35 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+// SupportNotifier — уведомление менеджеров о новых сообщениях в поддержку (WebSocket).
+type SupportNotifier interface {
+	NotifySupportMessage(ctx context.Context, msg *models.SupportMessage)
+}
+
 type ClientHandler struct {
 	mongoDB          *mongo.Database
 	userRepo         *repository.UserRepository
 	supportRepo      *repository.SupportRepository
+	supportNotifier  SupportNotifier
 	tournamentRepo   *repository.TournamentRepository
 	registrationRepo *repository.RegistrationRepository
-    banRepo          *repository.BanRepository  
+	banRepo          *repository.BanRepository
 }
 
 func NewClientHandler(
 	mongoDB *mongo.Database,
 	userRepo *repository.UserRepository,
 	supportRepo *repository.SupportRepository,
+	supportNotifier SupportNotifier,
 	tournamentRepo *repository.TournamentRepository,
 	registrationRepo *repository.RegistrationRepository,
-    banRepo *repository.BanRepository, 
+	banRepo *repository.BanRepository,
 ) *ClientHandler {
 	return &ClientHandler{
 		mongoDB: mongoDB, userRepo: userRepo,
-		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
-		registrationRepo: registrationRepo,
-         banRepo:          banRepo, 
+		supportRepo: supportRepo, supportNotifier: supportNotifier,
+		tournamentRepo: tournamentRepo, registrationRepo: registrationRepo,
+		banRepo: banRepo,
 	}
 }
 // GetUserTheme - получение темы пользователя

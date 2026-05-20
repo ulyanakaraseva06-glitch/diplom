@@ -53,3 +53,12 @@ func messageWithImage(text, imageURL string) string {
 	}
 	return text + "|IMG|" + imageURL
 }
+
+// supportMessageParts — текст и URL картинки из message (|IMG|) или колонки image_url.
+func supportMessageParts(message, imageURL string) (text, img string) {
+	text, img = parseImageFromMessage(message)
+	if img == "" && imageURL != "" {
+		img = imageURL
+	}
+	return text, img
+}

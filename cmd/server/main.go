@@ -71,7 +71,7 @@ func main() {
     banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo, logRepo)  // ← теперь logRepo существует
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, supportHandler, tournamentRepo, registrationRepo, banRepo)
     uploadHandler := handlers.NewUploadHandler()
     calendarRepo := repository.NewCalendarRepository(database)
     calendarHandler := handlers.NewCalendarHandler(calendarRepo, tournamentRepo)
@@ -140,8 +140,10 @@ func main() {
     api.HandleFunc("/client/teams", clientHandler.CreateTeam).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/teams/{team_id}", clientHandler.UpdateTeam).Methods("PUT", "OPTIONS")
 
-    // Мессенджер
+    // Мессенджер (явные маршруты для чата поддержки peer_id=0)
     api.HandleFunc("/client/chats", clientHandler.ListChats).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/chats/0/messages", clientHandler.GetSupportChatMessages).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/chats/0/messages", clientHandler.SendSupportChatMessage).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}/messages", clientHandler.GetChatMessages).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}/messages", clientHandler.SendChatMessage).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/chats/{peer_id:-?[0-9]+}", clientHandler.DeleteChat).Methods("DELETE", "OPTIONS")

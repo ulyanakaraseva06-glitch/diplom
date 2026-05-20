@@ -94,7 +94,9 @@ const Messenger: React.FC = () => {
       setText('');
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     } catch (e) {
-      alert('Не удалось отправить сообщение');
+      const msg = e instanceof Error ? e.message : 'Не удалось отправить сообщение';
+      alert(msg || 'Не удалось отправить сообщение');
+      console.error('sendMessage failed:', e);
     } finally {
       setSending(false);
     }

@@ -380,17 +380,19 @@ export const clientApi = {
       headers: authHeaders(),
     }).then(handleJsonArray<ChatPreview>),
 
-  getMessages: (peerId: number) =>
-    fetch(`${API}/client/chats/${peerId}/messages`, { headers: authHeaders() }).then(
-      handleJsonArray<ChatMessage>
-    ),
-
-  sendMessage: (peerId: number, text: string, image_url?: string) =>
-    fetch(`${API}/client/chats/${peerId}/messages`, {
+  sendMessage: (peerId: number, text: string, image_url?: string) => {
+    const path = peerId === 0 ? '/client/chats/0/messages' : `/client/chats/${peerId}/messages`;
+    return fetch(`${API}${path}`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ text, image_url }),
-    }).then(handleJson<ChatMessage>),
+      body: JSON.stringify({ text, image_url: image_url ?? '' }),
+    }).then(handleJson<ChatMessage>);
+  },
+
+  getMessages: (peerId: number) => {
+    const path = peerId === 0 ? '/client/chats/0/messages' : `/client/chats/${peerId}/messages`;
+    return fetch(`${API}${path}`, { headers: authHeaders() }).then(handleJsonArray<ChatMessage>);
+  },
 
   deleteChat: (peerId: number) =>
     fetch(`${API}/client/chats/${peerId}`, {
