@@ -4,6 +4,7 @@ import (
     "encoding/json"
     "net/http"
     "time"
+    "log"
 
     "esports-manager/internal/middleware"
     "esports-manager/internal/repository"
@@ -35,7 +36,6 @@ func (h *AnalyticsHandler) GetTournamentsByMonth(w http.ResponseWriter, r *http.
         return
     }
 
-    // Получаем турниры за последние 6 месяцев
     months := make([]string, 6)
     counts := make([]int, 6)
     
@@ -47,6 +47,7 @@ func (h *AnalyticsHandler) GetTournamentsByMonth(w http.ResponseWriter, r *http.
         
         count, err := h.tournamentRepo.CountByMonth(r.Context(), month.Year(), int(month.Month()))
         if err != nil {
+            log.Printf("Error counting tournaments for %s: %v", monthName, err)
             counts[5-i] = 0
             continue
         }
