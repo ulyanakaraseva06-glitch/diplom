@@ -1,8 +1,7 @@
-import Grid from '@mui/material/Grid';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { bansApi } from '../api/bans';
-import { Ban, BanRequest, BanType } from '../types';
+import { Ban, BanRequest } from '../types';
 import Papa from 'papaparse';
 import DownloadIcon from '@mui/icons-material/Download';
 import {

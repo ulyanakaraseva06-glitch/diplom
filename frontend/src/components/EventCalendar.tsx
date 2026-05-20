@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -14,6 +14,7 @@ import {
   Typography,
   Chip,
   Alert,
+  CircularProgress,
   Select,
   MenuItem,
   FormControl,
@@ -48,7 +49,7 @@ const EventCalendar: React.FC = () => {
   });
   const [error, setError] = useState('');
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/calendar/events');
@@ -58,11 +59,11 @@ const EventCalendar: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadEvents();
-  }, []);
+  }, [loadEvents]);
 
   const handleDateClick = (arg: any) => {
   setEditingEvent(null);
@@ -155,7 +156,22 @@ const EventCalendar: React.FC = () => {
   }));
 
   return (
-    <Box sx={{ height: 500, mb: 4 }}>
+    <Box sx={{ height: 500, mb: 4, position: 'relative' }}>
+      {loading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'rgba(255,255,255,0.6)',
+          }}
+        >
+          <CircularProgress size={32} />
+        </Box>
+      )}
       <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         📅 Календарь и планирование
         <Chip label="Турниры" size="small" sx={{ bgcolor: '#4caf50', color: 'white' }} />

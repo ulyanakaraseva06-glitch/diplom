@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -109,7 +109,7 @@ const ClientTournaments: React.FC = () => {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [myRegs, setMyRegs] = useState<MyRegistration[]>([]);
 
-  const loadMyRegs = async () => {
+  const loadMyRegs = useCallback(async () => {
     if (!isAuthenticated || !isClientUser) {
       setMyRegs([]);
       return;
@@ -120,7 +120,7 @@ const ClientTournaments: React.FC = () => {
     } catch {
       setMyRegs([]);
     }
-  };
+  }, [isAuthenticated, isClientUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,7 +178,7 @@ const ClientTournaments: React.FC = () => {
 
   useEffect(() => {
     loadMyRegs();
-  }, [isAuthenticated, isClientUser]);
+  }, [loadMyRegs]);
 
   useEffect(() => {
     const state = location.state as { scrollToTournaments?: boolean } | null;
@@ -346,7 +346,7 @@ const ClientTournaments: React.FC = () => {
           id="tournaments-section"
           sx={{
             mt: staffHome ? 3 : 0,
-            alignItems: 'flex-start',
+            alignItems: 'stretch',
             position: 'relative',
           }}
         >
@@ -354,21 +354,36 @@ const ClientTournaments: React.FC = () => {
             <Grid
               size={{ xs: 0, md: 4 }}
               sx={{
-                display: { xs: 'none', md: 'block' },
-                position: 'sticky',
-                top: { md: 100 },
-                alignSelf: 'flex-start',
+                display: { xs: 'none', md: 'flex' },
+                flexDirection: 'column',
                 width: '100%',
-                height: { md: 'calc(100vh - 120px)' },
-                maxHeight: { md: 'calc(100vh - 120px)' },
-                zIndex: 1,
+                minHeight: 0,
               }}
             >
-              <LunoxSpinFigure />
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  height: '100%',
+                }}
+              >
+                <LunoxSpinFigure compact />
+              </Box>
             </Grid>
           )}
           <Grid size={{ xs: 12, md: staffHome ? 12 : 8 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: staffHome ? 3 : 2,
+                flexWrap: 'wrap',
+                gap: 1,
+              }}
+            >
               <Typography
                 variant="h5"
                 sx={{
@@ -404,7 +419,7 @@ const ClientTournaments: React.FC = () => {
                 </Typography>
               </Paper>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                 {displayTournaments.map((tournament) => (
                   <Card
                     key={tournament.id}
@@ -420,9 +435,8 @@ const ClientTournaments: React.FC = () => {
                     <CardMedia
                       component="img"
                       sx={{
-                        width: { xs: '100%', sm: 200 },
-                        height: { xs: 160, sm: 'auto' },
-                        minHeight: { sm: 140 },
+                        width: { xs: '100%', sm: 148 },
+                        height: { xs: 120, sm: 108 },
                         objectFit: 'cover',
                         flexShrink: 0,
                         bgcolor: 'rgba(0, 212, 255, 0.06)',
@@ -436,11 +450,28 @@ const ClientTournaments: React.FC = () => {
                           'linear-gradient(135deg, rgba(0,212,255,0.2) 0%, rgba(255,0,68,0.15) 100%)';
                       }}
                     />
-                    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, p: 2 }}>
-                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        flex: 1,
+                        p: { xs: 1.5, sm: 1.25 },
+                        py: { sm: 1 },
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 700,
+                          mb: 0.25,
+                          fontSize: { sm: '0.95rem' },
+                          lineHeight: 1.3,
+                        }}
+                      >
                         {tournament.title}
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5, flexWrap: 'wrap' }}>
                         {tournament.is_vip ? (
                           <Chip icon={<DiamondIcon />} label="VIP" color="secondary" size="small" />
                         ) : (
@@ -448,16 +479,28 @@ const ClientTournaments: React.FC = () => {
                         )}
                         <Chip label={tournament.game} size="small" />
                       </Box>
-                      <Typography variant="body1" sx={{ color: 'primary.light', fontWeight: 600, mb: 1 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: 'primary.light', fontWeight: 600, mb: 0.25, fontSize: '0.8rem' }}
+                      >
                         Призовой фонд: {formatMoney(tournament.prize_pool)}
                       </Typography>
                       {tournament.entry_fee > 0 && (
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Взнос: {formatMoney(tournament.entry_fee)}
                         </Typography>
                       )}
-                      <Box sx={{ mt: 'auto', pt: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                        <Button variant="contained" onClick={() => setSelected(tournament)}>
+                      <Box
+                        sx={{
+                          mt: 'auto',
+                          pt: 1,
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 0.75,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Button size="small" variant="contained" onClick={() => setSelected(tournament)}>
                           Подробнее
                         </Button>
                         {isClientUser && (

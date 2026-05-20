@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
   Box,
-  Paper,
   Button,
   TextField,
   Grid,
@@ -72,7 +71,7 @@ const Friends: React.FC = () => {
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
   const [pickFriendsOpen, setPickFriendsOpen] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const [f, req, p, t] = await Promise.all([
@@ -91,11 +90,11 @@ const Friends: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     load();
-  }, [tab, search]);
+  }, [tab, load]);
 
   useEffect(() => {
     clientApi.getNotifications().then((list) => {

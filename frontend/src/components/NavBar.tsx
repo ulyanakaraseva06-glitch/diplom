@@ -6,7 +6,6 @@ import { ThemeContext } from '../contexts/ThemeContext';
 import {
   AppBar,
   Toolbar,
-  Typography,
   Button,
   Box,
   Avatar,

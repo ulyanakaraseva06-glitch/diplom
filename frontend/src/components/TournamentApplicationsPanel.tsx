@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Typography,
   Box,
@@ -37,7 +37,7 @@ const TournamentApplicationsPanel: React.FC<Props> = ({
   const [status, setStatus] = useState(defaultStatus);
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -48,11 +48,11 @@ const TournamentApplicationsPanel: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [status]);
 
   useEffect(() => {
     load();
-  }, [status]);
+  }, [load]);
 
   const handleApprove = async (id: number) => {
     try {

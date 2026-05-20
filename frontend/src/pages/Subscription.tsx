@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useThemeContext } from '../contexts/ThemeContext';
 import {
@@ -82,16 +82,7 @@ const SubscriptionPage: React.FC = () => {
   const [confirmTeamId, setConfirmTeamId] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  useEffect(() => {
-    fetchSubscriptions();
-    fetchUserSubscription();
-    clientApi.getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {});
-    clientApi.getTeams().then((teams) => {
-      setLeaderTeams(teams.filter((t) => t.is_leader));
-    }).catch(() => {});
-  }, []);
-
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:8080/api/subscriptions', {
@@ -104,9 +95,9 @@ const SubscriptionPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchUserSubscription = async () => {
+  const fetchUserSubscription = useCallback(async () => {
     try {
       const data = await clientApi.getMySubscriptions();
       setActiveSubs(sortActiveSubs(data.subscriptions));
@@ -120,7 +111,16 @@ const SubscriptionPage: React.FC = () => {
     } catch {
       console.error('Ошибка загрузки подписки пользователя');
     }
-  };
+  }, [updateUser]);
+
+  useEffect(() => {
+    fetchSubscriptions();
+    fetchUserSubscription();
+    clientApi.getWallet().then((w) => setWalletBalance(w.balance)).catch(() => {});
+    clientApi.getTeams().then((teams) => {
+      setLeaderTeams(teams.filter((t) => t.is_leader));
+    }).catch(() => {});
+  }, [fetchSubscriptions, fetchUserSubscription]);
 
   const hasActiveSub = activeSubs.length > 0;
 

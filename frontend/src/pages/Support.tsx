@@ -29,7 +29,7 @@ import { useNavigate } from 'react-router-dom';
 import HomeIcon from '@mui/icons-material/Home';
 
 const Support: React.FC = () => {
-  const { user, token, isManager } = useAuth();
+  const { token, isManager } = useAuth();
   const navigate = useNavigate();
   const [chats, setChats] = useState<ActiveChat[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);

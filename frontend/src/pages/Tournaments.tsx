@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { tournamentsApi } from '../api/tournaments';
@@ -31,7 +31,6 @@ import {
   Select,
   Stack,
   Card,
-  CardMedia,
   Switch,
   FormControlLabel,
 } from '@mui/material';
@@ -120,7 +119,7 @@ const Tournaments: React.FC = () => {
     max_teams?: string;
   }>({});
 
-  const loadTournaments = async () => {
+  const loadTournaments = useCallback(async () => {
     try {
       setLoading(true);
       const params: any = {};
@@ -146,7 +145,7 @@ const Tournaments: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterGame, filterStatus, searchTitle]);
 
   const loadUniqueGames = async () => {
     try {
@@ -166,7 +165,7 @@ const Tournaments: React.FC = () => {
 
   useEffect(() => {
     loadTournaments();
-  }, [filterGame, filterStatus, searchTitle]);
+  }, [loadTournaments]);
 
   useEffect(() => {
     loadUniqueGames();

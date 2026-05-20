@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -42,7 +42,6 @@ import {
   AttachMoney as AttachMoneyIcon,
   CloudUpload as CloudUploadIcon,
   Delete as DeleteIconOutline,
-  Image as ImageIcon,
   CalendarToday as CalendarIcon,
   Groups as GroupsIcon,
   SportsEsports as GameIcon,
@@ -120,15 +119,7 @@ const MyTournaments: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (user?.role !== 'organizer' && user?.role !== 'manager') {
-      navigate('/client/tournaments');
-      return;
-    }
-    loadMyTournaments();
-  }, [user, navigate]);
-
-  const loadMyTournaments = async () => {
+  const loadMyTournaments = useCallback(async () => {
     try {
       setLoading(true);
       const response = await tournamentsApi.getAll();
@@ -141,7 +132,15 @@ const MyTournaments: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.role !== 'organizer' && user?.role !== 'manager') {
+      navigate('/client/tournaments');
+      return;
+    }
+    loadMyTournaments();
+  }, [user?.role, navigate, loadMyTournaments]);
 
   const uploadBanner = async (file: File): Promise<string> => {
     const formData = new FormData();

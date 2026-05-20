@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { tournamentsApi } from '../api/tournaments';
-import { registrationsApi } from '../api/registrations';
 import { usersApi } from '../api/users';
-import { supportApi } from '../api/support';
 import { apiClient } from '../api/client';
 import EventCalendar from '../components/EventCalendar';
 import {
@@ -31,7 +29,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 const Dashboard: React.FC = () => {
-  const { user, isManager, isOrganizer, logout } = useAuth();
+  const { user, isManager, logout } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalTournaments: 0,

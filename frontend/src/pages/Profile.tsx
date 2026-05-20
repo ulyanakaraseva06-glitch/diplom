@@ -115,6 +115,7 @@ const Profile: React.FC = () => {
       if (loadedAny) setError('');
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- однократная загрузка профиля при открытии страницы
   }, []);
 
   const saveUsername = async () => {

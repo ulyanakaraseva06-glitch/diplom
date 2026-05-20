@@ -62,6 +62,7 @@ const TournamentDetails: React.FC = () => {
       }
     };
     if (id) loadTournament();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- перезагрузка только при смене id турнира
   }, [id]);
 
   const getParticipantById = (participantId: number | null): Participant | null => {
@@ -215,6 +216,7 @@ const TournamentDetails: React.FC = () => {
       }, 500);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- отложенное сохранение без лишних перезапусков
   }, [matches, champion, id, loading]);
   // Проверка: можно ли добавить команду в следующий раунд
 const canAddToNextRound = (matchId: string, teamId: number): boolean => {
@@ -337,7 +339,8 @@ const clearCell = (matchId: string, slot: 'team1Id' | 'team2Id') => {
     // НЕ трогаем предыдущие раунды
     let nextMatchId = match.nextMatchId;
     while (nextMatchId) {
-      const nextMatchIndex = newMatches.findIndex(m => m.id === nextMatchId);
+      const targetMatchId = nextMatchId;
+      const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
       if (nextMatchIndex === -1) break;
       
       const nextMatch = { ...newMatches[nextMatchIndex] };
@@ -390,7 +393,8 @@ const resetWinner = (matchId: string) => {
     // Удаляем этого победителя из следующих раундов
     let nextMatchId = match.nextMatchId;
     while (nextMatchId) {
-      const nextMatchIndex = newMatches.findIndex(m => m.id === nextMatchId);
+      const targetMatchId = nextMatchId;
+      const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
       if (nextMatchIndex === -1) break;
       
       const nextMatch = { ...newMatches[nextMatchIndex] };

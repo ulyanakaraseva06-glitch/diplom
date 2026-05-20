@@ -63,7 +63,12 @@ const SpinningHeroImage: React.FC<{ src: string; alt: string }> = ({ src, alt })
   </Box>
 );
 
-const LunoxSpinFigure: React.FC = () => {
+type LunoxSpinFigureProps = {
+  /** На главной рядом со списком турниров — вписаться в высоту колонки */
+  compact?: boolean;
+};
+
+const LunoxSpinFigure: React.FC<LunoxSpinFigureProps> = ({ compact = false }) => {
   const [models, setModels] = useState<HeroModel[]>([]);
   const [selected, setSelected] = useState<HeroModel | null>(null);
   const [src, setSrc] = useState('');
@@ -107,16 +112,17 @@ const LunoxSpinFigure: React.FC = () => {
         sx={{
           width: '100%',
           height: '100%',
+          minHeight: compact ? 0 : undefined,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          py: 1,
+          justifyContent: compact ? 'flex-start' : 'center',
+          py: compact ? 0.5 : 1,
         }}
       >
         {heroName && (
           <Typography
-            variant="h6"
+            variant={compact ? 'subtitle2' : 'h6'}
             sx={{
               flexShrink: 0,
               letterSpacing: '0.15em',
@@ -126,7 +132,7 @@ const LunoxSpinFigure: React.FC = () => {
               textAlign: 'center',
               width: '100%',
               pointerEvents: 'none',
-              mb: 1,
+              mb: compact ? 0.5 : 1,
             }}
           >
             {heroName}
@@ -156,7 +162,9 @@ const LunoxSpinFigure: React.FC = () => {
                 position: 'relative',
                 width: '100%',
                 height: '100%',
-                maxHeight: 'min(70vh, 520px)',
+                maxHeight: compact ? '100%' : 'min(70vh, 520px)',
+                minHeight: compact ? 0 : undefined,
+                flex: compact ? 1 : undefined,
                 perspective: '900px',
                 animation: `${float} 4.5s ease-in-out infinite`,
               }}
@@ -194,7 +202,17 @@ const LunoxSpinFigure: React.FC = () => {
           )}
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center', pointerEvents: 'auto', mt: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 0.5,
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
+            mt: compact ? 0.5 : 1,
+            flexShrink: 0,
+          }}
+        >
           <Button
             size="small"
             variant="outlined"

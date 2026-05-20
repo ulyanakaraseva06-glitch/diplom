@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Container,
@@ -41,20 +41,7 @@ const Messenger: React.FC = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadChats = async () => {
-    try {
-      const list = await clientApi.getChats(chatSearch);
-      setChats(Array.isArray(list) ? list : []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    loadChats();
-  }, [chatSearch]);
-
-  const loadMessages = async (chat: ChatPreview) => {
+  const loadMessages = useCallback(async (chat: ChatPreview) => {
     setLoading(true);
     try {
       const msgs = await clientApi.getMessages(chat.id);
@@ -66,12 +53,28 @@ const Messenger: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleSelect = (chat: ChatPreview) => {
-    setSelected(chat);
-    loadMessages(chat);
-  };
+  const handleSelect = useCallback(
+    (chat: ChatPreview) => {
+      setSelected(chat);
+      loadMessages(chat);
+    },
+    [loadMessages]
+  );
+
+  const loadChats = useCallback(async () => {
+    try {
+      const list = await clientApi.getChats(chatSearch);
+      setChats(Array.isArray(list) ? list : []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [chatSearch]);
+
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]);
 
   useEffect(() => {
     const peerId = (location.state as { chatPeerId?: number })?.chatPeerId;
@@ -80,7 +83,7 @@ const Messenger: React.FC = () => {
       const chat = list.find((c) => c.id === peerId);
       if (chat) handleSelect(chat);
     });
-  }, [location.state]);
+  }, [location.state, handleSelect]);
 
   const handleSend = async (imageUrl?: string) => {
     if (!selected || (!text.trim() && !imageUrl)) return;
