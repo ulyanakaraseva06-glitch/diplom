@@ -68,6 +68,8 @@ const bannerSrc = (url?: string) => {
 
 const AllTournaments: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
+  const isOrganizer = user?.role === 'organizer';
+  const showMyApplicationsTab = isAuthenticated && !isOrganizer;
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<ClientTournament[]>([]);
   const [organizers, setOrganizers] = useState<TournamentOrganizer[]>([]);
@@ -93,7 +95,7 @@ const AllTournaments: React.FC = () => {
   }, [organizerId, dateFrom, dateTo, vipFilter]);
 
   const loadRegs = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isOrganizer) {
       setMyRegs([]);
       return;
     }
@@ -103,7 +105,13 @@ const AllTournaments: React.FC = () => {
     } catch {
       setMyRegs([]);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isOrganizer]);
+
+  useEffect(() => {
+    if (isOrganizer && tab === 'my') {
+      setTab('all');
+    }
+  }, [isOrganizer, tab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -219,7 +227,7 @@ const AllTournaments: React.FC = () => {
         >
           <Tab label="Все турниры" value="all" />
           <Tab label="Прошедшие" value="past" />
-          <Tab label="Мои заявки" value="my" disabled={!isAuthenticated} />
+          {showMyApplicationsTab && <Tab label="Мои заявки" value="my" />}
         </Tabs>
 
         {error && (
