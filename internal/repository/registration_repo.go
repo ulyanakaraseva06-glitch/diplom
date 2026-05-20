@@ -344,3 +344,16 @@ func (r *RegistrationRepository) ListApplications(ctx context.Context, organizer
     }
     return out, nil
 }
+// CountByDate - количество регистраций за день
+func (r *RegistrationRepository) CountByDate(ctx context.Context, date time.Time) (int, error) {
+    var count int
+    query := `
+        SELECT COUNT(*) FROM tournament_registrations 
+        WHERE DATE(registered_at) = $1
+    `
+    err := r.db.Pool.QueryRow(ctx, query, date).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to count registrations by date: %w", err)
+    }
+    return count, nil
+}

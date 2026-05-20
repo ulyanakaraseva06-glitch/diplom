@@ -366,3 +366,79 @@ func (r *TournamentRepository) ListByOrganizer(ctx context.Context, organizerID 
     }
     return tournaments, nil
 }
+// CountByMonth - количество турниров по году и месяцу
+func (r *TournamentRepository) CountByMonth(ctx context.Context, year int, month int) (int, error) {
+    var count int
+    query := `
+        SELECT COUNT(*) FROM tournaments 
+        WHERE EXTRACT(YEAR FROM start_date) = $1 
+          AND EXTRACT(MONTH FROM start_date) = $2
+    `
+    err := r.db.Pool.QueryRow(ctx, query, year, month).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to count tournaments by month: %w", err)
+    }
+    return count, nil
+}
+
+// CountByStatus - количество турниров по статусам
+func (r *TournamentRepository) CountByStatus(ctx context.Context) (map[string]int, error) {
+    query := `
+        SELECT status, COUNT(*) FROM tournaments GROUP BY status
+    `
+    rows, err := r.db.Pool.Query(ctx, query)
+    if err != nil {
+        return nil, fmt.Errorf("failed to count tournaments by status: %w", err)
+    }
+    defer rows.Close()
+
+    result := make(map[string]int)
+    for rows.Next() {
+        var status string
+        var count int
+        if err := rows.Scan(&status, &count); err != nil {
+            return nil, err
+        }
+        result[status] = count
+    }
+    return result, nil
+}
+
+// GetTopOrganizers - топ организаторов по количеству турниров
+func (r *TournamentRepository) GetTopOrganizers(ctx context.Context, limit int) ([]struct {
+    OrganizerID   int    `json:"organizer_id"`
+    OrganizerName string `json:"organizer_name"`
+    Count         int    `json:"count"`
+}, error) {
+    query := `
+        SELECT t.organizer_id, u.username, COUNT(*) as count
+        FROM tournaments t
+        JOIN users u ON u.id = t.organizer_id
+        GROUP BY t.organizer_id, u.username
+        ORDER BY count DESC
+        LIMIT $1
+    `
+    rows, err := r.db.Pool.Query(ctx, query, limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get top organizers: %w", err)
+    }
+    defer rows.Close()
+
+    var result []struct {
+        OrganizerID   int    `json:"organizer_id"`
+        OrganizerName string `json:"organizer_name"`
+        Count         int    `json:"count"`
+    }
+    for rows.Next() {
+        var item struct {
+            OrganizerID   int    `json:"organizer_id"`
+            OrganizerName string `json:"organizer_name"`
+            Count         int    `json:"count"`
+        }
+        if err := rows.Scan(&item.OrganizerID, &item.OrganizerName, &item.Count); err != nil {
+            return nil, err
+        }
+        result = append(result, item)
+    }
+    return result, nil
+}

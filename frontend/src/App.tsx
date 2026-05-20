@@ -22,6 +22,7 @@ import Friends from './pages/Friends';
 import Themes from './pages/Themes';
 import Wallet from './pages/Wallet';
 import WalletPayments from './pages/WalletPayments';
+import Logs from './pages/Logs';
 
 const queryClient = new QueryClient();
 
@@ -85,6 +86,7 @@ function AppRoutes() {
         <StaffRoute>
           <MyTournaments />
         </StaffRoute>
+        
       } />
 
       <Route path="/tournament-applications" element={
@@ -163,6 +165,12 @@ function AppRoutes() {
         <AdminRoute>
           <Support />
         </AdminRoute>
+      } />
+      
+      <Route path="/logs" element={
+        <ProtectedRoute>
+          <Logs />
+        </ProtectedRoute>
       } />
 
       <Route path="/wallet-payments" element={

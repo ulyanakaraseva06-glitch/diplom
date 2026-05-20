@@ -63,21 +63,23 @@ func main() {
         mongoDatabase = mongoClient.Database
     }
 
+    logRepo := repository.NewManagerLogRepository(database)
     // Инициализация хендлеров
     authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, cfg.JWTSecret)
-    tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo)
+    tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo, logRepo)  // ← теперь logRepo существует
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
-    banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo)
+    banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo, logRepo)  // ← теперь logRepo существует
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-   clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
-   uploadHandler := handlers.NewUploadHandler()
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
+    uploadHandler := handlers.NewUploadHandler()
     calendarRepo := repository.NewCalendarRepository(database)
     calendarHandler := handlers.NewCalendarHandler(calendarRepo, tournamentRepo)
-
-    // Создание роутера
+    analyticsHandler := handlers.NewAnalyticsHandler(tournamentRepo, registrationRepo, userRepo)
+    logsHandler := handlers.NewLogsHandler(logRepo)  // ← теперь logRepo существует
+        // Создание роутера
     r := mux.NewRouter()
-
+    
     // Добавляем CORS middleware для всех маршрутов
     r.Use(middleware.CORS)
 
@@ -118,6 +120,15 @@ func main() {
     api.HandleFunc("/client/minigame/leaderboard", clientHandler.GetDragonRunnerLeaderboard).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/minigame/score", clientHandler.SubmitDragonRunnerScore).Methods("POST", "OPTIONS")
     api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
+    api.HandleFunc("/admin/logs", logsHandler.GetLogs).Methods("GET", "OPTIONS")
+
+    // В защищённые маршруты (api) добавьте:
+    api.HandleFunc("/analytics/tournaments-by-month", analyticsHandler.GetTournamentsByMonth).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/tournaments-by-status", analyticsHandler.GetTournamentsByStatus).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/registrations-trend", analyticsHandler.GetRegistrationsTrend).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/top-organizers", analyticsHandler.GetTopOrganizers).Methods("GET", "OPTIONS")
+    api.HandleFunc("/admin/logs", logsHandler.GetLogs).Methods("GET", "OPTIONS")
+
 
     // календарь
     api.HandleFunc("/calendar/events", calendarHandler.GetEvents).Methods("GET", "OPTIONS")
