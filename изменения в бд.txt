@@ -26,3 +26,8 @@ CREATE TABLE calendar_events (
 
 CREATE INDEX idx_calendar_events_user_id ON calendar_events(user_id);
 CREATE INDEX idx_calendar_events_start_date ON calendar_events(start_date);
+
+изменить в бд 20.05 7.00
+ALTER TABLE manager_logs 
+ALTER COLUMN old_data TYPE TEXT,
+ALTER COLUMN new_data TYPE TEXT;

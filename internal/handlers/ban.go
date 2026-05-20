@@ -21,17 +21,20 @@ type BanHandler struct {
     banRepo  *repository.BanRepository
     userRepo *repository.UserRepository
     supportRepo *repository.SupportRepository 
+    logRepo  *repository.ManagerLogRepository  
 }
 
 func NewBanHandler(
     banRepo *repository.BanRepository,
     userRepo *repository.UserRepository,
     supportRepo *repository.SupportRepository,
+    logRepo *repository.ManagerLogRepository,
 ) *BanHandler {
     return &BanHandler{
         banRepo:     banRepo,
         userRepo:    userRepo,
         supportRepo: supportRepo,
+        logRepo:  logRepo,
     }
 }
 
@@ -78,7 +81,10 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Failed to create ban: "+err.Error(), http.StatusInternalServerError)
         return
     }
-
+    // После успешного создания бана
+if h.logRepo != nil {
+    h.logRepo.Create(r.Context(), moderatorID, "BAN", "user", req.UserID, "", req.Reason)
+}   
     // Если это предупреждение (warning), отправляем сообщение в чат поддержки
     if req.BanType == models.BanTypeWarning {
         moderator, _ := h.userRepo.FindByID(r.Context(), moderatorID)
@@ -104,16 +110,22 @@ func (h *BanHandler) CreateBan(w http.ResponseWriter, r *http.Request) {
             IsRead:     false,
             CreatedAt:  time.Now(),
         }
+        
         if err := h.supportRepo.Create(r.Context(), supportMsg); err != nil {
             log.Printf("Failed to send warning message to user %d: %v", req.UserID, err)
             // Не возвращаем ошибку, просто логируем
         }
+        // Логируем действие
+if h.logRepo != nil {
+    h.logRepo.Create(r.Context(), moderatorID, "BAN", "user", req.UserID, "", req.Reason)
+}
     }
-
+    
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(ban)
 }
+
 
 // RemoveBan - разблокировка пользователя (только менеджер)
 func (h *BanHandler) RemoveBan(w http.ResponseWriter, r *http.Request) {

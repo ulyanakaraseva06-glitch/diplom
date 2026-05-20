@@ -6,6 +6,8 @@ import { usersApi } from '../api/users';
 import { supportApi } from '../api/support';
 import { apiClient } from '../api/client';
 import EventCalendar from '../components/EventCalendar';
+import Analytics from '../components/Analytics';
+import HistoryIcon from '@mui/icons-material/History';
 import {
   Container,
   Typography,
@@ -173,7 +175,7 @@ const loadStats = async () => {
                 </CardContent>
               </Card>
             </Grid>
-
+            
             {isManager && (
               <Grid size={{ xs: 12, md: 4 }}>
                 <Card sx={{ height: '100%' }}>
@@ -190,7 +192,7 @@ const loadStats = async () => {
                 </Card>
               </Grid>
             )}
-
+            
             {isManager && (
               <>
                 <Grid size={{ xs: 12, md: 4 }}>
@@ -207,7 +209,22 @@ const loadStats = async () => {
                     </CardContent>
                   </Card>
                 </Grid>
-
+{isManager && (
+  <Grid size={{ xs: 12, md: 4 }}>
+    <Card sx={{ height: '100%' }}>
+      <CardContent>
+        <HistoryIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+        <Typography variant="h6">Логи действий</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Просмотр истории действий менеджеров
+        </Typography>
+        <Button variant="contained" color="info" onClick={() => navigate('/logs')}>
+          Перейти
+        </Button>
+      </CardContent>
+    </Card>
+  </Grid>
+)}
                 <Grid size={{ xs: 12, md: 4 }}>
                   <Card sx={{ height: '100%' }}>
                     <CardContent>
@@ -240,6 +257,7 @@ const loadStats = async () => {
                 <Box sx={{ mb: 6 }}>
                 <EventCalendar />
               </Box>
+              <Analytics />
               </>
             )}
           </Grid>
