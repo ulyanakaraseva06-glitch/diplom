@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,6 +20,7 @@ type TournamentHandler struct {
 	userRepo         *repository.UserRepository
 	registrationRepo *repository.RegistrationRepository
 	bracketRepo      *repository.BracketRepository
+	logRepo          *repository.ManagerLogRepository
 }
 
 func NewTournamentHandler(
@@ -26,12 +28,14 @@ func NewTournamentHandler(
 	userRepo *repository.UserRepository,
 	registrationRepo *repository.RegistrationRepository,
 	bracketRepo *repository.BracketRepository,
+	logRepo *repository.ManagerLogRepository, // добавить параметр
 ) *TournamentHandler {
 	return &TournamentHandler{
 		tournamentRepo:   tournamentRepo,
 		userRepo:         userRepo,
 		registrationRepo: registrationRepo,
 		bracketRepo:      bracketRepo,
+		logRepo:          logRepo, // добавить
 	}
 }
 
@@ -229,6 +233,8 @@ func (h *TournamentHandler) UpdateTournament(w http.ResponseWriter, r *http.Requ
 }
 
 // DeleteTournament - удаление турнира (только для менеджеров)
+// DeleteTournament - удаление турнира (только для менеджеров)
+// DeleteTournament - удаление турнира (только для менеджеров)
 func (h *TournamentHandler) DeleteTournament(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
@@ -237,10 +243,31 @@ func (h *TournamentHandler) DeleteTournament(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	managerID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем турнир для логирования
+	tournament, _ := h.tournamentRepo.FindByID(r.Context(), id)
+	tournamentTitle := ""
+	if tournament != nil {
+		tournamentTitle = tournament.Title
+	}
+
 	err = h.tournamentRepo.Delete(r.Context(), id)
 	if err != nil {
 		http.Error(w, "Failed to delete tournament: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Логируем действие
+	if h.logRepo != nil {
+		err := h.logRepo.Create(r.Context(), managerID, "DELETE", "tournament", id, tournamentTitle, "")
+		if err != nil {
+			log.Printf("Failed to create log: %v", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

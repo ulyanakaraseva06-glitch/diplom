@@ -64,6 +64,7 @@ func main() {
 		mongoDatabase = mongoClient.Database
 	}
 
+<<<<<<< HEAD
 	// Neo4j
 	var neo4jClient *neo4j.Neo4jClient
 	neoClient, neoErr := neo4j.NewNeo4jClient(cfg.Neo4jURI, cfg.Neo4jUsername, cfg.Neo4jPassword, "neo4j")
@@ -89,6 +90,27 @@ func main() {
 
 	// Создание роутера
 	r := mux.NewRouter()
+=======
+    logRepo := repository.NewManagerLogRepository(database)
+    // Инициализация хендлеров
+    authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, cfg.JWTSecret)
+    tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo, logRepo)  // ← теперь logRepo существует
+    registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
+    banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo, logRepo)  // ← теперь logRepo существует
+    supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
+    userHandler := handlers.NewUserHandler(userRepo)
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, tournamentRepo, registrationRepo, banRepo)
+    uploadHandler := handlers.NewUploadHandler()
+    calendarRepo := repository.NewCalendarRepository(database)
+    calendarHandler := handlers.NewCalendarHandler(calendarRepo, tournamentRepo)
+    analyticsHandler := handlers.NewAnalyticsHandler(tournamentRepo, registrationRepo, userRepo)
+    logsHandler := handlers.NewLogsHandler(logRepo)  // ← теперь logRepo существует
+        // Создание роутера
+    r := mux.NewRouter()
+    
+    // Добавляем CORS middleware для всех маршрутов
+    r.Use(middleware.CORS)
+>>>>>>> 820b0156810f285eab14a7b4f677d033e2e6810c
 
 	// Добавляем CORS middleware для всех маршрутов
 	r.Use(middleware.CORS)
@@ -96,6 +118,7 @@ func main() {
 	uploadsPath := filepath.Join(utils.GetProjectRoot(), "uploads")
 	r.PathPrefix("/uploads/").Handler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsPath))))
 
+<<<<<<< HEAD
 	// Публичные маршруты (не требуют авторизации)
 	r.HandleFunc("/api/auth/register", authHandler.Register).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
@@ -103,6 +126,43 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}).Methods("GET", "OPTIONS")
+=======
+    // WebSocket (не требует авторизации)
+    r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
+    // Клиентские маршруты (публичные)
+    r.HandleFunc("/api/client/tournaments", clientHandler.GetTournaments).Methods("GET", "OPTIONS")
+    r.HandleFunc("/api/client/tournaments/organizers", clientHandler.GetTournamentOrganizers).Methods("GET", "OPTIONS")
+    r.HandleFunc("/api/client/news", handlers.GetCybersportNews).Methods("GET", "OPTIONS")
+    // Защищенные маршруты (требуют авторизации)
+    api := r.PathPrefix("/api").Subrouter()
+    api.Use(middleware.AuthMiddleware([]byte(cfg.JWTSecret)))
+    // Маршруты для чата поддержки (активные чаты)
+    api.HandleFunc("/support/chats", supportHandler.GetActiveChats).Methods("GET", "OPTIONS")
+    api.HandleFunc("/support/upload", supportHandler.UploadImage).Methods("POST", "OPTIONS")
+    // Друзья
+    api.HandleFunc("/client/friends", clientHandler.GetFriends).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/list", clientHandler.GetFriendsDetailed).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/requests", clientHandler.GetFriendRequests).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/friends/add", clientHandler.AddFriend).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/request", clientHandler.SendFriendRequest).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/respond", clientHandler.RespondFriendRequest).Methods("POST", "OPTIONS")
+    api.HandleFunc("/client/friends/{id:[0-9]+}", clientHandler.RemoveFriend).Methods("DELETE", "OPTIONS")
+    api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/minigame/leaderboard", clientHandler.GetDragonRunnerLeaderboard).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/minigame/score", clientHandler.SubmitDragonRunnerScore).Methods("POST", "OPTIONS")
+    api.HandleFunc("/upload/banner", uploadHandler.UploadBanner).Methods("POST", "OPTIONS")
+    api.HandleFunc("/admin/logs", logsHandler.GetLogs).Methods("GET", "OPTIONS")
+
+    // В защищённые маршруты (api) добавьте:
+    api.HandleFunc("/analytics/tournaments-by-month", analyticsHandler.GetTournamentsByMonth).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/tournaments-by-status", analyticsHandler.GetTournamentsByStatus).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/registrations-trend", analyticsHandler.GetRegistrationsTrend).Methods("GET", "OPTIONS")
+    api.HandleFunc("/analytics/top-organizers", analyticsHandler.GetTopOrganizers).Methods("GET", "OPTIONS")
+    api.HandleFunc("/admin/logs", logsHandler.GetLogs).Methods("GET", "OPTIONS")
+
+>>>>>>> 820b0156810f285eab14a7b4f677d033e2e6810c
 
 	// WebSocket (не требует авторизации)
 	r.HandleFunc("/ws/support", supportHandler.WebSocket).Methods("GET", "OPTIONS")
