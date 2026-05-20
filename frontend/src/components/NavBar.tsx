@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useThemeContext } from '../contexts/ThemeContext';
 import {
   AppBar,
   Toolbar,
@@ -32,8 +33,20 @@ const navAvatarSrc = (url?: string) => {
   return `${API}${url}`;
 };
 
+const getLogoSrc = (theme: string) => {
+  switch (theme) {
+    case 'light':
+      return `${process.env.PUBLIC_URL}/logo_pikmi.jpg`;
+    case 'dark':
+      return `${process.env.PUBLIC_URL}/logo_bad.jpg`;
+    default:
+      return `${process.env.PUBLIC_URL}/logo.jpg`;
+  }
+};
+
 const NavBar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
+  const { theme } = useThemeContext();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
@@ -74,7 +87,7 @@ const NavBar: React.FC = () => {
         >
           <Box
             component="img"
-            src={`${process.env.PUBLIC_URL}/logo.jpg`}
+            src={getLogoSrc(theme)}
             alt="GAMER.OK"
             sx={{
               height: { xs: 96, sm: 112 },
