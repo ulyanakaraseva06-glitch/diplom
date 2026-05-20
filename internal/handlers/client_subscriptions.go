@@ -385,17 +385,26 @@ func (h *ClientHandler) viewFromUserSubscription(ctx context.Context, userID int
 	}
 
 	userSub.Source = source
+	isTeam := source == "team" || userSub.TeamID != "" || userSub.SubscriptionID == "sub_team"
 	view := userSubscriptionView{
 		UserSubscription: userSub,
 		SubscriptionName: sub.Name,
 		TargetType:       sub.TargetType,
-		CanCancel:        source == "self",
+		CanCancel:        !isTeam,
 	}
-	if userSub.TeamID != "" {
-		if team, err := h.findTeamByID(ctx, userSub.TeamID); err == nil {
-			view.TeamName = team.Name
-			if team.LeaderID == userID {
-				view.CanCancel = true
+	if isTeam {
+		if view.TargetType == "" {
+			view.TargetType = "team"
+		}
+		teamID := userSub.TeamID
+		if teamID == "" {
+			teamID = h.resolveTeamIDForSubscription(ctx, userID, userSub)
+			view.TeamID = teamID
+		}
+		if teamID != "" {
+			if team, err := h.findTeamByID(ctx, teamID); err == nil && team != nil {
+				view.TeamName = team.Name
+				view.CanCancel = team.LeaderID == userID
 			}
 		}
 	}
@@ -406,11 +415,46 @@ type cancelSubscriptionRequest struct {
 	UserSubscriptionID string `json:"user_subscription_id"`
 }
 
+func (h *ClientHandler) isTeamSubscriptionRecord(sub models.UserSubscription) bool {
+	if sub.TeamID != "" || sub.Source == "team" {
+		return true
+	}
+	return sub.SubscriptionID == "sub_team"
+}
+
+func (h *ClientHandler) resolveTeamIDForSubscription(ctx context.Context, userID int, sub models.UserSubscription) string {
+	if sub.TeamID != "" {
+		return sub.TeamID
+	}
+	if !h.isTeamSubscriptionRecord(sub) || h.mongoDB == nil {
+		return ""
+	}
+	cursor, err := h.mongoDB.Collection("teams").Find(ctx, bson.M{"leader_id": userID})
+	if err != nil {
+		return ""
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var team models.TeamMongo
+		if cursor.Decode(&team) != nil {
+			continue
+		}
+		if _, ok := h.getActiveTeamSubscriptionMeta(ctx, team.ID); ok {
+			return team.ID
+		}
+	}
+	return ""
+}
+
 // CancelSubscription — отмена личной или командной (лидер) подписки.
 func (h *ClientHandler) CancelSubscription(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if h.mongoDB == nil {
+		http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -432,23 +476,44 @@ func (h *ClientHandler) CancelSubscription(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	source := active.Source
-	if source == "" && active.TeamID != "" {
-		source = "team"
-	}
-	filter := bson.M{"user_id": userID, "is_active": true, "source": "self"}
-	if source == "team" && active.TeamID != "" {
-		team, err := h.findTeamByID(r.Context(), active.TeamID)
-		if err != nil || team.LeaderID != userID {
+	if h.isTeamSubscriptionRecord(active) {
+		teamID := h.resolveTeamIDForSubscription(r.Context(), userID, active)
+		if teamID == "" {
+			http.Error(w, "Командная подписка не привязана к команде", http.StatusBadRequest)
+			return
+		}
+		team, err := h.findTeamByID(r.Context(), teamID)
+		if err != nil || team == nil {
+			http.Error(w, "Команда не найдена", http.StatusNotFound)
+			return
+		}
+		if team.LeaderID != userID {
 			http.Error(w, "Отменить командную подписку может только лидер", http.StatusForbidden)
 			return
 		}
-		filter = bson.M{"team_id": active.TeamID, "is_active": true, "source": "team"}
+
+		members := teamMemberIDs(team)
+		h.deactivateTeamSubscriptions(r.Context(), teamID, members)
+
+		teamName := team.Name
+		for _, mid := range members {
+			if mid == userID {
+				continue
+			}
+			h.notifyUser(r.Context(), mid, "team_subscription_cancelled", "Подписка отменена",
+				fmt.Sprintf("Командная подписка команды «%s» отменена лидером. VIP и бонусы команды больше не действуют.", teamName), teamID)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": fmt.Sprintf("Командная подписка «%s» отменена для всех участников (%d чел.)", teamName, len(members)),
+		})
+		return
 	}
 
 	_, err = h.mongoDB.Collection("user_subscriptions").UpdateMany(
 		r.Context(),
-		filter,
+		bson.M{"user_id": userID, "is_active": true, "source": bson.M{"$in": []interface{}{"self", ""}}},
 		bson.M{"$set": bson.M{"is_active": false, "auto_renew": false}},
 	)
 	if err != nil {
@@ -456,6 +521,7 @@ func (h *ClientHandler) CancelSubscription(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Подписка отменена"})
 }
 
