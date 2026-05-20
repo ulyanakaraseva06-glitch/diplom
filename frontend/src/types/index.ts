@@ -79,14 +79,16 @@ export interface TournamentUpdate {
 export interface Registration {
   id: number;
   tournament_id: number;
+  tournament_title?: string;
+  organizer_id?: number;
+  organizer_username?: string;
   user_id: number;
+  username?: string;
+  email?: string;
   team_name: string;
   status: 'pending' | 'approved' | 'rejected';
   payment_status: 'pending' | 'paid' | 'refunded';
   registered_at: string;
-  username?: string;
-  email?: string;
-  tournament_title?: string;
 }
 
 export interface RegistrationRequest {

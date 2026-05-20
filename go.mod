@@ -8,6 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/crypto v0.49.0
 )

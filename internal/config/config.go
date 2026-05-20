@@ -15,6 +15,10 @@ type Config struct {
     JWTSecret  string
     MongoURI    string
     MongoDBName string
+    Neo4jURI       string  
+    Neo4jUsername  string  
+    Neo4jPassword  string
+    Neo4jDatabase string
 }
 
 func Load() *Config {
@@ -32,11 +36,15 @@ func Load() *Config {
         DBHost:     getEnv("DB_HOST", "localhost"),
         DBPort:     getEnv("DB_PORT", "5432"),
         DBUser:     getEnv("DB_USER", "postgres"),
-        DBPassword: getEnv("DB_PASSWORD", "1234"),
+        DBPassword: getEnv("DB_PASSWORD", "postgres"),
         DBName:     getEnv("DB_NAME", "esports_manager"),
         MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-        MongoDBName: getEnv("MONGO_DB_NAME", "kib_db"),
+        MongoDBName: getEnv("MONGO_DB_NAME", "Kib_db"),
         JWTSecret:  getEnv("JWT_SECRET", "default-secret-key"),
+        Neo4jURI:       getEnv("NEO4J_URI", "bolt://localhost:7687"),       
+        Neo4jUsername:  getEnv("NEO4J_USERNAME", "neo4j"),                   
+        Neo4jPassword:  getEnv("NEO4J_PASSWORD", "password"),  
+        Neo4jDatabase: getEnv("NEO4J_DATABASE", "neo4j"),
         
     }
 }

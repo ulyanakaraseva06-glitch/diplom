@@ -28,6 +28,7 @@ import {
   ListItemButton,
   ListItemText,
   Checkbox,
+  Paper
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import CheckIcon from '@mui/icons-material/Check';
@@ -39,37 +40,43 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import ChatIcon from '@mui/icons-material/Chat';
 import EditIcon from '@mui/icons-material/Edit';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import RecommendIcon from '@mui/icons-material/Recommend';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
+import BoltIcon from '@mui/icons-material/Bolt';
 import NavBar from '../components/NavBar';
 import UsernameWithBadge from '../components/UsernameWithBadge';
-import BoltIcon from '@mui/icons-material/Bolt';
 import UserProfileDialog from '../components/UserProfileDialog';
-import { clientApi, PlayerUser, FriendRequestItem, Team, PublicProfile } from '../api/clientApi';
+import { clientApi, PlayerUser, FriendRequestItem, Team, PublicProfile, Recommendation } from '../api/clientApi';
 import { mediaUrl } from '../utils/media';
 import { confirmDelete } from '../utils/confirmDelete';
 
 const Friends: React.FC = () => {
   const navigate = useNavigate();
-  const [tab, setTab] = useState(0);
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<number>(0);
+  const [search, setSearch] = useState<string>('');
   const [friends, setFriends] = useState<PlayerUser[]>([]);
   const [incoming, setIncoming] = useState<FriendRequestItem[]>([]);
   const [outgoing, setOutgoing] = useState<FriendRequestItem[]>([]);
   const [players, setPlayers] = useState<PlayerUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [snack, setSnack] = useState('');
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingRecs, setLoadingRecs] = useState<boolean>(false);
+  const [snack, setSnack] = useState<string>('');
+  const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileOpen, setProfileOpen] = useState<boolean>(false);
+  const [profileLoading, setProfileLoading] = useState<boolean>(false);
   const [viewProfile, setViewProfile] = useState<PublicProfile | null>(null);
 
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
   const [editTeam, setEditTeam] = useState<Team | null>(null);
-  const [teamName, setTeamName] = useState('');
-  const [teamAvatar, setTeamAvatar] = useState('');
-  const [teamAvatarPreview, setTeamAvatarPreview] = useState('');
+  const [teamName, setTeamName] = useState<string>('');
+  const [teamAvatar, setTeamAvatar] = useState<string>('');
+  const [teamAvatarPreview, setTeamAvatarPreview] = useState<string>('');
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
-  const [pickFriendsOpen, setPickFriendsOpen] = useState(false);
+  const [pickFriendsOpen, setPickFriendsOpen] = useState<boolean>(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,33 +87,57 @@ const Friends: React.FC = () => {
         clientApi.searchPlayers(search),
         clientApi.getTeams(),
       ]);
-      setFriends(f);
-      setIncoming(req.incoming || []);
-      setOutgoing(req.outgoing || []);
-      setPlayers(p);
-      setTeams(t);
-    } catch {
+      setFriends(Array.isArray(f) ? f : []);
+      setIncoming(Array.isArray(req?.incoming) ? req.incoming : []);
+      setOutgoing(Array.isArray(req?.outgoing) ? req.outgoing : []);
+      setPlayers(Array.isArray(p) ? p : []);
+      setTeams(Array.isArray(t) ? t : []);
+    } catch (err) {
+      console.error('Load error:', err);
       setSnack('Ошибка загрузки');
     } finally {
       setLoading(false);
     }
   }, [search]);
 
+  const loadRecommendations = async () => {
+    setLoadingRecs(true);
+    try {
+      const data = await clientApi.getRecommendations();
+      setRecommendations(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load recommendations:', err);
+      setRecommendations([]);
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, [tab, load]);
 
   useEffect(() => {
-    clientApi.getNotifications().then((list) => {
-      const unread = list.find(
-        (n: { is_read: boolean; type: string }) =>
-          !n.is_read &&
-          (n.type === 'friend_request' ||
-            n.type === 'wallet_deposit_rejected' ||
-            n.type === 'wallet_deposit_approved')
-      );
-      if (unread) setSnack(unread.body || unread.title);
-    }).catch(() => {});
+    if (tab === 4) {
+      loadRecommendations();
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    clientApi.getNotifications()
+      .then((list) => {
+        if (Array.isArray(list)) {
+          const unread = list.find(
+            (n: { is_read: boolean; type: string }) =>
+              !n.is_read &&
+              (n.type === 'friend_request' ||
+                n.type === 'wallet_deposit_rejected' ||
+                n.type === 'wallet_deposit_approved')
+          );
+          if (unread) setSnack(unread.body || unread.title);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const openUserProfile = async (userId: number) => {
@@ -128,8 +159,28 @@ const Friends: React.FC = () => {
       await clientApi.sendFriendRequest(id);
       setSnack('Заявка отправлена');
       load();
+      if (tab === 4) {
+        loadRecommendations();
+      }
     } catch (e: any) {
       setSnack(e.message?.includes('exists') ? 'Заявка уже отправлена' : 'Ошибка отправки');
+    }
+  };
+
+  const sendRequestFromRecommendation = async (userId: string) => {
+    const numericId = parseInt(userId.replace('user_', ''), 10);
+    if (isNaN(numericId)) return;
+
+    setSendingRequest(userId);
+    try {
+      await clientApi.sendFriendRequest(numericId);
+      setSnack('Заявка отправлена');
+      loadRecommendations();
+      load();
+    } catch (e: any) {
+      setSnack(e.message?.includes('exists') ? 'Заявка уже отправлена' : 'Ошибка отправки');
+    } finally {
+      setSendingRequest(null);
     }
   };
 
@@ -217,9 +268,20 @@ const Friends: React.FC = () => {
   };
 
   const toggleMember = (id: number) => {
-    setSelectedMembers((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    setSelectedMembers((prev: number[]) =>
+      prev.includes(id) ? prev.filter((x: number) => x !== id) : [...prev, id]
     );
+  };
+
+  const getRoleIcon = (role: string): string => {
+    switch (role) {
+      case 'carry': return '🗡️';
+      case 'mid': return '⭐';
+      case 'offlane': return '🛡️';
+      case 'support': return '💚';
+      case 'jungle': return '🌲';
+      default: return '🎮';
+    }
   };
 
   const UserCard: React.FC<{
@@ -227,10 +289,7 @@ const Friends: React.FC = () => {
     actions?: React.ReactNode;
     onClick?: () => void;
   }> = ({ u, actions, onClick }) => (
-    <Card
-      sx={{ height: '100%', cursor: onClick ? 'pointer' : 'default' }}
-      onClick={onClick}
-    >
+    <Card sx={{ height: '100%', cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
       <CardContent sx={{ textAlign: 'center' }}>
         <Avatar
           src={mediaUrl(u.avatar_url)}
@@ -255,21 +314,22 @@ const Friends: React.FC = () => {
             Друзья
           </Typography>
 
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable">
+          <Tabs value={tab} onChange={(_: React.SyntheticEvent, v: number) => setTab(v)} sx={{ mb: 2 }} variant="scrollable">
             <Tab label="Мои друзья" />
             <Tab label="Заявки" />
             <Tab label="Поиск" />
             <Tab label="Команда" icon={<GroupsIcon />} iconPosition="start" />
+            <Tab label="Рекомендации" icon={<RecommendIcon />} iconPosition="start" />
           </Tabs>
 
-          {tab !== 3 && (
+          {tab !== 3 && tab !== 4 && (
             <Tooltip title="Введите никнейм для фильтрации списка">
               <TextField
                 fullWidth
                 size="small"
                 placeholder="Поиск по никнейму..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
                 sx={{ mb: 3 }}
               />
             </Tooltip>
@@ -281,6 +341,7 @@ const Friends: React.FC = () => {
             </Box>
           ) : (
             <>
+              {/* Вкладка 0: Мои друзья */}
               {tab === 0 && (
                 <Grid container spacing={2}>
                   {friends.length === 0 && (
@@ -288,7 +349,7 @@ const Friends: React.FC = () => {
                       <Alert severity="info">Пока нет друзей. Найдите игроков во вкладке «Поиск»</Alert>
                     </Grid>
                   )}
-                  {friends.map((u) => (
+                  {friends.map((u: PlayerUser) => (
                     <Grid size={{ xs: 12, sm: 6, md: 4 }} key={u.id}>
                       <UserCard
                         u={u}
@@ -299,7 +360,7 @@ const Friends: React.FC = () => {
                             color="error"
                             size="small"
                             startIcon={<PersonRemoveIcon />}
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               removeFriend(u.id);
                             }}
@@ -313,6 +374,7 @@ const Friends: React.FC = () => {
                 </Grid>
               )}
 
+              {/* Вкладка 1: Заявки */}
               {tab === 1 && (
                 <Box>
                   <Typography variant="h6" gutterBottom>
@@ -322,7 +384,7 @@ const Friends: React.FC = () => {
                     <Alert severity="info" sx={{ mb: 2 }}>Нет входящих заявок</Alert>
                   )}
                   <Grid container spacing={2} sx={{ mb: 4 }}>
-                    {incoming.map((r) => (
+                    {incoming.map((r: FriendRequestItem) => (
                       <Grid size={{ xs: 12, sm: 6, md: 4 }} key={r.id}>
                         <UserCard
                           u={r.user}
@@ -358,7 +420,7 @@ const Friends: React.FC = () => {
                   </Typography>
                   {outgoing.length === 0 && <Alert severity="info">Нет исходящих заявок</Alert>}
                   <Grid container spacing={2}>
-                    {outgoing.map((r) => (
+                    {outgoing.map((r: FriendRequestItem) => (
                       <Grid size={{ xs: 12, sm: 6, md: 4 }} key={r.id}>
                         <UserCard u={r.user} actions={<Chip label="Ожидает ответа" color="warning" />} />
                       </Grid>
@@ -367,9 +429,10 @@ const Friends: React.FC = () => {
                 </Box>
               )}
 
+              {/* Вкладка 2: Поиск */}
               {tab === 2 && (
                 <Grid container spacing={2}>
-                  {players.map((u) => (
+                  {players.map((u: PlayerUser) => (
                     <Grid size={{ xs: 12, sm: 6, md: 4 }} key={u.id}>
                       <UserCard
                         u={u}
@@ -397,18 +460,16 @@ const Friends: React.FC = () => {
                 </Grid>
               )}
 
+              {/* Вкладка 3: Команда */}
               {tab === 3 && (
                 <Box>
                   <Grid container spacing={2} sx={{ mb: 3 }}>
-                    {teams.map((team) => (
+                    {teams.map((team: Team) => (
                       <Grid size={{ xs: 12, md: 6 }} key={team.id}>
                         <Card>
                           <CardContent>
                             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-                              <Avatar
-                                src={mediaUrl(team.avatar_url)}
-                                sx={{ width: 64, height: 64 }}
-                              >
+                              <Avatar src={mediaUrl(team.avatar_url)} sx={{ width: 64, height: 64 }}>
                                 <GroupsIcon />
                               </Avatar>
                               <Box>
@@ -427,9 +488,7 @@ const Friends: React.FC = () => {
                                   label={
                                     <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
                                       {m.is_leader ? `${m.username} (лидер)` : m.username}
-                                      {m.has_subscription && (
-                                        <BoltIcon sx={{ fontSize: 14, color: '#FFC107' }} />
-                                      )}
+                                      {m.has_subscription && <BoltIcon sx={{ fontSize: 14, color: '#FFC107' }} />}
                                     </Box>
                                   }
                                 />
@@ -449,10 +508,7 @@ const Friends: React.FC = () => {
                               Перейти в чат
                             </Button>
                             {team.is_leader && (
-                              <Button
-                                startIcon={<EditIcon />}
-                                onClick={() => openEditTeam(team)}
-                              >
+                              <Button startIcon={<EditIcon />} onClick={() => openEditTeam(team)}>
                                 Изменить состав
                               </Button>
                             )}
@@ -475,6 +531,95 @@ const Friends: React.FC = () => {
                   >
                     Создать команду
                   </Button>
+                </Box>
+              )}
+
+              {/* Вкладка 4: Рекомендации */}
+              {tab === 4 && (
+                <Box>
+                  {loadingRecs ? (
+                    <Box display="flex" justifyContent="center" py={6}>
+                      <CircularProgress />
+                    </Box>
+                  ) : recommendations.length === 0 ? (
+                    <Paper sx={{ p: 4, textAlign: 'center' }}>
+                      <RecommendIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+                      <Typography variant="h6" color="text.secondary" gutterBottom>
+                        Нет рекомендаций
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Добавьте информацию о своих игровых предпочтениях в профиле,
+                        и система найдёт вам подходящих союзников.
+                      </Typography>
+                      <Button variant="contained" sx={{ mt: 2 }} onClick={() => (window.location.href = '/profile')}>
+                        Заполнить профиль
+                      </Button>
+                    </Paper>
+                  ) : (
+                    <Grid container spacing={2}>
+                      {recommendations.map((rec: Recommendation) => (
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={rec.user_id}>
+                          <Card sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Box display="flex" alignItems="center" gap={2} mb={2}>
+                                <Avatar sx={{ bgcolor: 'secondary.main', width: 56, height: 56 }}>
+                                  {rec.nickname?.charAt(0)?.toUpperCase() || '?'}
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                    {rec.nickname}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Совместимость: {Math.round(rec.score)}%
+                                  </Typography>
+                                </Box>
+                              </Box>
+
+                              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                                <Chip
+                                  icon={<TrendingUpIcon />}
+                                  label={`MMR: ${rec.mmr}`}
+                                  color="primary"
+                                  size="small"
+                                />
+                                <Chip
+                                  icon={<SportsEsportsIcon />}
+                                  label={`${getRoleIcon(rec.role)} ${rec.role || 'не указана'}`}
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              </Box>
+
+                              <Box sx={{ mb: 2 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  🤝 Общих игр: {rec.common_games}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                                  👥 Общих друзей: {rec.mutual_friends}
+                                </Typography>
+                              </Box>
+
+                              <Button
+                                fullWidth
+                                variant="contained"
+                                startIcon={<PersonAddIcon />}
+                                onClick={() => sendRequestFromRecommendation(rec.user_id)}
+                                disabled={sendingRequest === rec.user_id}
+                                sx={{
+                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                  '&:hover': {
+                                    background: 'linear-gradient(135deg, #764ba2 0%, #667eea 100%)',
+                                  },
+                                }}
+                              >
+                                {sendingRequest === rec.user_id ? 'Отправка...' : 'Добавить в друзья'}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
                 </Box>
               )}
             </>
@@ -501,7 +646,7 @@ const Friends: React.FC = () => {
               accept="image/*"
               hidden
               id="team-avatar-upload"
-              onChange={(e) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 const f = e.target.files?.[0];
                 if (f) uploadTeamAvatar(f);
                 e.target.value = '';
@@ -522,7 +667,7 @@ const Friends: React.FC = () => {
             fullWidth
             label="Название команды"
             value={teamName}
-            onChange={(e) => setTeamName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTeamName(e.target.value)}
             sx={{ mb: 2 }}
           />
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setPickFriendsOpen(true)} fullWidth>
@@ -541,7 +686,7 @@ const Friends: React.FC = () => {
         <DialogTitle>Выберите друзей</DialogTitle>
         <DialogContent dividers>
           <List>
-            {friends.map((f) => (
+            {friends.map((f: PlayerUser) => (
               <ListItem key={f.id} disablePadding>
                 <ListItemButton onClick={() => toggleMember(f.id)}>
                   <Checkbox checked={selectedMembers.includes(f.id)} />

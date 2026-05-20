@@ -4,7 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { tournamentsApi } from '../api/tournaments';
 import { TournamentWithParticipants, Participant } from '../types';
 import {
-  Container, Typography, Box, Paper, Grid, Chip, Button, CircularProgress, Alert, Divider, IconButton, Tooltip,
+  Container,
+  Typography,
+  Box,
+  Paper,
+  Grid,
+  Chip,
+  Button,
+  CircularProgress,
+  Alert,
+  Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
@@ -15,7 +26,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
-
 
 interface Match {
   id: string;
@@ -30,7 +40,7 @@ interface Match {
 const TournamentDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isManager } = useAuth();
+  const { isManager, isOrganizer, user } = useAuth();
   const [tournament, setTournament] = useState<TournamentWithParticipants | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +50,16 @@ const TournamentDetails: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [champion, setChampion] = useState<Participant | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Отладка
+  console.log('isManager:', isManager);
+  console.log('isOrganizer:', isOrganizer);
+  console.log('user?.id:', user?.id);
+  console.log('tournament?.organizer_id:', tournament?.organizer_id);
+
+  // Проверка, может ли пользователь редактировать сетку
+  const canEditBracket = isManager || (isOrganizer && tournament?.organizer_id === user?.id);
+  console.log('canEditBracket:', canEditBracket);
 
   useEffect(() => {
     const loadTournament = async () => {
@@ -62,7 +82,6 @@ const TournamentDetails: React.FC = () => {
       }
     };
     if (id) loadTournament();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- перезагрузка только при смене id турнира
   }, [id]);
 
   const getParticipantById = (participantId: number | null): Participant | null => {
@@ -142,9 +161,9 @@ const TournamentDetails: React.FC = () => {
     return `${roundNum}-й раунд`;
   };
   
-  // Сохранение в БД
   const saveToDatabase = async (currentMatches: Match[], currentChampion: Participant | null) => {
     if (!id || saving) return;
+    if (!canEditBracket) return;
     
     setSaving(true);
     const matchesData = currentMatches.map(m => ({
@@ -169,7 +188,6 @@ const TournamentDetails: React.FC = () => {
     }
   };
   
-  // Загрузка сохранённой сетки из БД
   const loadSavedBracket = async (): Promise<boolean> => {
     if (!id) return false;
     
@@ -186,7 +204,6 @@ const TournamentDetails: React.FC = () => {
           if (championTeam) setChampion(championTeam);
         }
         
-        // Обновляем отображение раундов
         const allRounds: Match[][] = [];
         const maxRound = Math.max(...loadedMatches.map(m => m.round));
         
@@ -208,227 +225,200 @@ const TournamentDetails: React.FC = () => {
     return false;
   };
   
-  // Сохраняем при изменениях
   useEffect(() => {
-    if (matches.length > 0 && id && !loading && !saving) {
+    if (matches.length > 0 && id && !loading && !saving && canEditBracket) {
       const timer = setTimeout(() => {
         saveToDatabase(matches, champion);
       }, 500);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- отложенное сохранение без лишних перезапусков
-  }, [matches, champion, id, loading]);
-  // Проверка: можно ли добавить команду в следующий раунд
-const canAddToNextRound = (matchId: string, teamId: number): boolean => {
-  // Находим текущий матч
-  const currentMatch = matches.find(m => m.id === matchId);
-  if (!currentMatch) return false;
-  
-  // Правило 1: Из одного матча может выйти только один победитель
-  if (currentMatch.winnerId !== null && currentMatch.winnerId !== teamId) {
-    alert('❌ Из этого матча победитель уже выбран!');
-    return false;
-  }
-  
-  // Правило 2: Нельзя добавить одну и ту же команду дважды в следующий раунд
-  const allNextRoundMatches = matches.filter(m => m.round === currentMatch.round + 1);
-  for (const match of allNextRoundMatches) {
-    if (match.team1Id === teamId || match.team2Id === teamId) {
-      alert('❌ Эта команда уже есть в следующем раунде!');
+  }, [matches, champion, id, loading, canEditBracket]);
+
+  const canAddToNextRound = (matchId: string, teamId: number): boolean => {
+    const currentMatch = matches.find(m => m.id === matchId);
+    if (!currentMatch) return false;
+    
+    if (currentMatch.winnerId !== null && currentMatch.winnerId !== teamId) {
+      alert('❌ Из этого матча победитель уже выбран!');
       return false;
     }
-  }
-  
-  // Правило 3: Нельзя добавить обе команды из одного матча
-  const otherTeamId = currentMatch.team1Id === teamId ? currentMatch.team2Id : currentMatch.team1Id;
-  if (otherTeamId !== null && currentMatch.winnerId === otherTeamId) {
-    alert('❌ Из этого матча уже выбран другой победитель!');
-    return false;
-  }
-  
-  return true;
-};
-  // Копирование команды в самый первый свободный слот следующего раунда (исходная ячейка не стирается)
-  // Копирование команды в самый первый свободный слот следующего раунда
-const copyTeamToNextRoundTop = (matchId: string, teamId: number) => {
-  if (!isEditMode) return;
-  
-  // Проверяем, можно ли добавить команду
-  if (!canAddToNextRound(matchId, teamId)) return;
-  
-  setMatches(prevMatches => {
-    const newMatches = [...prevMatches];
     
-    // Находим текущий матч
-    const currentMatchIndex = newMatches.findIndex(m => m.id === matchId);
-    if (currentMatchIndex === -1) return prevMatches;
-    const currentMatch = { ...newMatches[currentMatchIndex] };
+    const allNextRoundMatches = matches.filter(m => m.round === currentMatch.round + 1);
+    for (const match of allNextRoundMatches) {
+      if (match.team1Id === teamId || match.team2Id === teamId) {
+        alert('❌ Эта команда уже есть в следующем раунде!');
+        return false;
+      }
+    }
     
-    // Помечаем победителя
-    currentMatch.winnerId = teamId;
-    newMatches[currentMatchIndex] = currentMatch;
+    const otherTeamId = currentMatch.team1Id === teamId ? currentMatch.team2Id : currentMatch.team1Id;
+    if (otherTeamId !== null && currentMatch.winnerId === otherTeamId) {
+      alert('❌ Из этого матча уже выбран другой победитель!');
+      return false;
+    }
     
-    // Находим следующий раунд
-    const nextMatchId = currentMatch.nextMatchId;
-    if (!nextMatchId) {
-      // Это финал - назначаем чемпиона
-      const championTeam = getParticipantById(teamId);
-      if (championTeam) setChampion(championTeam);
+    return true;
+  };
+
+  const copyTeamToNextRoundTop = (matchId: string, teamId: number) => {
+    if (!isEditMode) return;
+    if (!canAddToNextRound(matchId, teamId)) return;
+    
+    setMatches(prevMatches => {
+      const newMatches = [...prevMatches];
+      const currentMatchIndex = newMatches.findIndex(m => m.id === matchId);
+      if (currentMatchIndex === -1) return prevMatches;
+      const currentMatch = { ...newMatches[currentMatchIndex] };
+      
+      currentMatch.winnerId = teamId;
+      newMatches[currentMatchIndex] = currentMatch;
+      
+      const nextMatchId = currentMatch.nextMatchId;
+      if (!nextMatchId) {
+        const championTeam = getParticipantById(teamId);
+        if (championTeam) setChampion(championTeam);
+        updateAllRounds(newMatches);
+        return newMatches;
+      }
+      
+      const nextRoundMatches = newMatches.filter(m => m.round === currentMatch.round + 1);
+      if (nextRoundMatches.length === 0) return prevMatches;
+      
+      let targetMatchIndex = -1;
+      let targetSlot: 'team1Id' | 'team2Id' | null = null;
+      const sortedMatches = [...nextRoundMatches].sort((a, b) => a.position - b.position);
+      
+      for (const match of sortedMatches) {
+        const idx = newMatches.findIndex(m => m.id === match.id);
+        if (match.team1Id === null) {
+          targetMatchIndex = idx;
+          targetSlot = 'team1Id';
+          break;
+        }
+        if (match.team2Id === null) {
+          targetMatchIndex = idx;
+          targetSlot = 'team2Id';
+          break;
+        }
+      }
+      
+      if (targetMatchIndex !== -1 && targetSlot !== null) {
+        const targetMatch = { ...newMatches[targetMatchIndex] };
+        targetMatch[targetSlot] = teamId;
+        newMatches[targetMatchIndex] = targetMatch;
+      }
+      
       updateAllRounds(newMatches);
       return newMatches;
-    }
+    });
+  };
+
+  const clearCell = (matchId: string, slot: 'team1Id' | 'team2Id') => {
+    if (!isEditMode) return;
     
-    // Находим все матчи следующего раунда
-    const nextRoundMatches = newMatches.filter(m => m.round === currentMatch.round + 1);
-    if (nextRoundMatches.length === 0) return prevMatches;
-    
-    // Ищем первый свободный слот
-    let targetMatchIndex = -1;
-    let targetSlot: 'team1Id' | 'team2Id' | null = null;
-    
-    // Сортируем матчи по позиции для правильного порядка
-    const sortedMatches = [...nextRoundMatches].sort((a, b) => a.position - b.position);
-    
-    for (const match of sortedMatches) {
-      const idx = newMatches.findIndex(m => m.id === match.id);
-      if (match.team1Id === null) {
-        targetMatchIndex = idx;
-        targetSlot = 'team1Id';
-        break;
+    setMatches(prevMatches => {
+      const newMatches = [...prevMatches];
+      const matchIndex = newMatches.findIndex(m => m.id === matchId);
+      if (matchIndex === -1) return prevMatches;
+      const match = { ...newMatches[matchIndex] };
+      
+      const removedTeamId = match[slot];
+      match[slot] = null;
+      
+      if (match.winnerId === removedTeamId) {
+        match.winnerId = null;
       }
-      if (match.team2Id === null) {
-        targetMatchIndex = idx;
-        targetSlot = 'team2Id';
-        break;
+      
+      newMatches[matchIndex] = match;
+      
+      let nextMatchId = match.nextMatchId;
+      while (nextMatchId) {
+        const targetMatchId = nextMatchId;
+        const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
+        if (nextMatchIndex === -1) break;
+        
+        const nextMatch = { ...newMatches[nextMatchIndex] };
+        let changed = false;
+        
+        if (nextMatch.team1Id === removedTeamId) {
+          nextMatch.team1Id = null;
+          changed = true;
+        }
+        if (nextMatch.team2Id === removedTeamId) {
+          nextMatch.team2Id = null;
+          changed = true;
+        }
+        if (nextMatch.winnerId === removedTeamId) {
+          nextMatch.winnerId = null;
+          changed = true;
+        }
+        
+        if (changed) {
+          newMatches[nextMatchIndex] = nextMatch;
+        }
+        
+        nextMatchId = nextMatch.nextMatchId;
       }
-    }
+      
+      if (champion?.id === removedTeamId) {
+        setChampion(null);
+      }
+      
+      updateAllRounds(newMatches);
+      return newMatches;
+    });
+  };
+
+  const resetWinner = (matchId: string) => {
+    if (!isEditMode) return;
     
-    if (targetMatchIndex !== -1 && targetSlot !== null) {
-      const targetMatch = { ...newMatches[targetMatchIndex] };
-      targetMatch[targetSlot] = teamId;
-      newMatches[targetMatchIndex] = targetMatch;
-    }
-    
-    updateAllRounds(newMatches);
-    return newMatches;
-  });
-};
-  // Очистка ячейки - удаляем команду и сбрасываем все связанные победители
-// Очистка ячейки - удаляем команду и сбрасываем все связанные победители
-// Очистка ячейки - удаляем команду из указанного матча и сбрасываем только связанные с ней победы
-const clearCell = (matchId: string, slot: 'team1Id' | 'team2Id') => {
-  if (!isEditMode) return;
-  
-  setMatches(prevMatches => {
-    const newMatches = [...prevMatches];
-    const matchIndex = newMatches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return prevMatches;
-    const match = { ...newMatches[matchIndex] };
-    
-    const removedTeamId = match[slot];
-    match[slot] = null;
-    
-    // Если эта команда была победителем в этом матче, сбрасываем победителя
-    if (match.winnerId === removedTeamId) {
+    setMatches(prevMatches => {
+      const newMatches = [...prevMatches];
+      const matchIndex = newMatches.findIndex(m => m.id === matchId);
+      if (matchIndex === -1) return prevMatches;
+      const match = { ...newMatches[matchIndex] };
+      const oldWinnerId = match.winnerId;
+      
       match.winnerId = null;
-    }
-    
-    newMatches[matchIndex] = match;
-    
-    // Теперь удаляем эту команду ТОЛЬКО из следующих раундов (куда она прошла как победитель)
-    // НЕ трогаем предыдущие раунды
-    let nextMatchId = match.nextMatchId;
-    while (nextMatchId) {
-      const targetMatchId = nextMatchId;
-      const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
-      if (nextMatchIndex === -1) break;
+      newMatches[matchIndex] = match;
       
-      const nextMatch = { ...newMatches[nextMatchIndex] };
-      let changed = false;
-      
-      // Удаляем команду из слотов следующего матча
-      if (nextMatch.team1Id === removedTeamId) {
-        nextMatch.team1Id = null;
-        changed = true;
-      }
-      if (nextMatch.team2Id === removedTeamId) {
-        nextMatch.team2Id = null;
-        changed = true;
-      }
-      if (nextMatch.winnerId === removedTeamId) {
-        nextMatch.winnerId = null;
-        changed = true;
-      }
-      
-      if (changed) {
-        newMatches[nextMatchIndex] = nextMatch;
+      let nextMatchId = match.nextMatchId;
+      while (nextMatchId) {
+        const targetMatchId = nextMatchId;
+        const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
+        if (nextMatchIndex === -1) break;
+        
+        const nextMatch = { ...newMatches[nextMatchIndex] };
+        let changed = false;
+        
+        if (nextMatch.team1Id === oldWinnerId) {
+          nextMatch.team1Id = null;
+          changed = true;
+        }
+        if (nextMatch.team2Id === oldWinnerId) {
+          nextMatch.team2Id = null;
+          changed = true;
+        }
+        if (nextMatch.winnerId === oldWinnerId) {
+          nextMatch.winnerId = null;
+          changed = true;
+        }
+        
+        if (changed) {
+          newMatches[nextMatchIndex] = nextMatch;
+        }
+        
+        nextMatchId = nextMatch.nextMatchId;
       }
       
-      nextMatchId = nextMatch.nextMatchId;
-    }
-    
-    // Сбрасываем чемпиона, если это он
-    if (champion?.id === removedTeamId) {
-      setChampion(null);
-    }
-    
-    updateAllRounds(newMatches);
-    return newMatches;
-  });
-};
-// Сброс победителя в матче (команды остаются на месте)
-const resetWinner = (matchId: string) => {
-  if (!isEditMode) return;
-  
-  setMatches(prevMatches => {
-    const newMatches = [...prevMatches];
-    const matchIndex = newMatches.findIndex(m => m.id === matchId);
-    if (matchIndex === -1) return prevMatches;
-    const match = { ...newMatches[matchIndex] };
-    const oldWinnerId = match.winnerId;
-    
-    match.winnerId = null;
-    newMatches[matchIndex] = match;
-    
-    // Удаляем этого победителя из следующих раундов
-    let nextMatchId = match.nextMatchId;
-    while (nextMatchId) {
-      const targetMatchId = nextMatchId;
-      const nextMatchIndex = newMatches.findIndex((m) => m.id === targetMatchId);
-      if (nextMatchIndex === -1) break;
-      
-      const nextMatch = { ...newMatches[nextMatchIndex] };
-      let changed = false;
-      
-      if (nextMatch.team1Id === oldWinnerId) {
-        nextMatch.team1Id = null;
-        changed = true;
-      }
-      if (nextMatch.team2Id === oldWinnerId) {
-        nextMatch.team2Id = null;
-        changed = true;
-      }
-      if (nextMatch.winnerId === oldWinnerId) {
-        nextMatch.winnerId = null;
-        changed = true;
+      if (champion?.id === oldWinnerId) {
+        setChampion(null);
       }
       
-      if (changed) {
-        newMatches[nextMatchIndex] = nextMatch;
-      }
-      
-      nextMatchId = nextMatch.nextMatchId;
-    }
-    
-    if (champion?.id === oldWinnerId) {
-      setChampion(null);
-    }
-    
-    updateAllRounds(newMatches);
-    return newMatches;
-  });
-};
-// Сброс всех результатов турнира
+      updateAllRounds(newMatches);
+      return newMatches;
+    });
+  };
 
   const updateAllRounds = (allMatches: Match[]) => {
     const newRounds = rounds.map(round => ({
@@ -475,158 +465,194 @@ const resetWinner = (matchId: string) => {
   }
 
   const renderMatch = (match: Match) => {
-  const team1 = getParticipantById(match.team1Id);
-  const team2 = getParticipantById(match.team2Id);
-  const winner = getParticipantById(match.winnerId);
-  const showDeleteButton = match.round > 1 && isEditMode;
-  // Кнопка сброса победителя доступна ВСЕГДА, если есть победитель
-  const showResetWinnerButton = isEditMode && match.winnerId !== null;
-  
-  return (
-    <Paper key={match.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-      {/* Team 1 */}
-      <Box
-        onClick={() => isEditMode && match.team1Id && copyTeamToNextRoundTop(match.id, match.team1Id)}
-        sx={{
-          p: 1, mb: 1, borderRadius: 1,
-          cursor: isEditMode && match.team1Id ? 'pointer' : 'default',
-          bgcolor: winner?.id === match.team1Id ? '#c8e6c9' : '#f5f5f5',
-          '&:hover': isEditMode && match.team1Id ? { bgcolor: '#e0e0e0' } : {},
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}
-      >
-        <Typography variant="body2">{team1?.team_name || '—'}</Typography>
-        {showDeleteButton && match.team1Id && (
-          <Tooltip title="Удалить команду">
-            <IconButton size="small" onClick={(e) => { e.stopPropagation(); clearCell(match.id, 'team1Id'); }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-      
-      <Typography variant="caption" display="block" align="center" sx={{ my: 0.5 }}>VS</Typography>
-      
-      {/* Team 2 */}
-      <Box
-        onClick={() => isEditMode && match.team2Id && copyTeamToNextRoundTop(match.id, match.team2Id)}
-        sx={{
-          p: 1, borderRadius: 1,
-          cursor: isEditMode && match.team2Id ? 'pointer' : 'default',
-          bgcolor: winner?.id === match.team2Id ? '#c8e6c9' : '#f5f5f5',
-          '&:hover': isEditMode && match.team2Id ? { bgcolor: '#e0e0e0' } : {},
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}
-      >
-        <Typography variant="body2">{team2?.team_name || '—'}</Typography>
-        {showDeleteButton && match.team2Id && (
-          <Tooltip title="Удалить команду">
-            <IconButton size="small" onClick={(e) => { e.stopPropagation(); clearCell(match.id, 'team2Id'); }}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-      
-      {/* Кнопка сброса победителя (ВО ВСЕХ РАУНДАХ) */}
-      {showResetWinnerButton && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
-          <Tooltip title="Сбросить победителя">
-            <IconButton size="small" color="warning" onClick={() => resetWinner(match.id)}>
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      )}
-    </Paper>
-  );
-};
-  
-  return (
-  <Container maxWidth="xl">
-    <Box sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/tournaments')}>Назад к турнирам</Button>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          {isManager && (
-            <Button 
-              variant="outlined" 
-              startIcon={<SaveIcon />} 
-              onClick={handleManualSave}
-              disabled={saving}
-            >
-              {saving ? 'Сохранение...' : 'Сохранить сетку'}
-            </Button>
-          )}
-          {isManager && (
-            <Button variant={isEditMode ? "contained" : "outlined"} startIcon={<EditIcon />} onClick={toggleEditMode} color={isEditMode ? "success" : "primary"}>
-              {isEditMode ? "Режим редактирования (Вкл)" : "Включить режим редактирования"}
-            </Button>
+    const team1 = getParticipantById(match.team1Id);
+    const team2 = getParticipantById(match.team2Id);
+    const winner = getParticipantById(match.winnerId);
+    const showDeleteButton = match.round > 1 && isEditMode;
+    const showResetWinnerButton = isEditMode && match.winnerId !== null;
+    
+    return (
+      <Paper key={match.id} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+        <Box
+          onClick={() => isEditMode && match.team1Id && copyTeamToNextRoundTop(match.id, match.team1Id)}
+          sx={{
+            p: 1, mb: 1, borderRadius: 1,
+            cursor: isEditMode && match.team1Id ? 'pointer' : 'default',
+            bgcolor: winner?.id === match.team1Id ? '#c8e6c9' : '#f5f5f5',
+            '&:hover': isEditMode && match.team1Id ? { bgcolor: '#e0e0e0' } : {},
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}
+        >
+          <Typography variant="body2">{team1?.team_name || '—'}</Typography>
+          {showDeleteButton && match.team1Id && (
+            <Tooltip title="Удалить команду">
+              <IconButton size="small" onClick={(e) => { e.stopPropagation(); clearCell(match.id, 'team1Id'); }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           )}
         </Box>
-      </Box>
-
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h4" gutterBottom>{tournament.title}</Typography>
-        <Chip label={tournament.status === 'pending' ? 'Ожидает' : 'Одобрен'} color={tournament.status === 'pending' ? 'warning' : 'success'} sx={{ mb: 2 }} />
         
-        {tournament.banner_url && (
-    <Box
-      component="img"
-      src={`http://localhost:8080${tournament.banner_url}`}
-      alt={tournament.title}
-      sx={{
-        width: '100%',
-        maxHeight: 300,
-        objectFit: 'cover',
-        borderRadius: 2,
-        mb: 2,
-      }}
-      onError={(e) => {
-        const img = e.target as HTMLImageElement;
-        img.style.display = 'none';
-      }}
-    />
-  )}
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box display="flex" alignItems="center" gap={1}><EmojiEventsIcon color="primary" /><Typography><strong>Игра:</strong> {tournament.game}</Typography></Box>
-            <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}><CalendarTodayIcon color="action" /><Typography><strong>Дата начала:</strong> {new Date(tournament.start_date).toLocaleString()}</Typography></Box>
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box display="flex" alignItems="center" gap={1}><AttachMoneyIcon color="success" /><Typography><strong>Призовой фонд:</strong> {tournament.prize_pool.toLocaleString()} ₽</Typography></Box>
-            <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}><GroupsIcon color="info" /><Typography><strong>Участников:</strong> {tournament.participants?.length || 0} / {tournament.max_teams}</Typography></Box>
-          </Grid>
-        </Grid>
-        {tournament.description && (<><Divider sx={{ my: 2 }} /><Typography><strong>Описание:</strong></Typography><Typography color="text.secondary">{tournament.description}</Typography></>)}
+        <Typography variant="caption" display="block" align="center" sx={{ my: 0.5 }}>VS</Typography>
         
-        {champion && (
-          <Alert severity="success" sx={{ mt: 2 }} icon={<EmojiEventsIcon />}>
-            <strong>Чемпион турнира: {champion.team_name}!</strong>
-          </Alert>
+        <Box
+          onClick={() => isEditMode && match.team2Id && copyTeamToNextRoundTop(match.id, match.team2Id)}
+          sx={{
+            p: 1, borderRadius: 1,
+            cursor: isEditMode && match.team2Id ? 'pointer' : 'default',
+            bgcolor: winner?.id === match.team2Id ? '#c8e6c9' : '#f5f5f5',
+            '&:hover': isEditMode && match.team2Id ? { bgcolor: '#e0e0e0' } : {},
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}
+        >
+          <Typography variant="body2">{team2?.team_name || '—'}</Typography>
+          {showDeleteButton && match.team2Id && (
+            <Tooltip title="Удалить команду">
+              <IconButton size="small" onClick={(e) => { e.stopPropagation(); clearCell(match.id, 'team2Id'); }}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+        
+        {showResetWinnerButton && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+            <Tooltip title="Сбросить победителя">
+              <IconButton size="small" color="warning" onClick={() => resetWinner(match.id)}>
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         )}
       </Paper>
-
-      <Paper sx={{ p: 3 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-          <Typography variant="h5">Сетка турнира {isEditMode && <Chip label="Режим редактирования активен" size="small" color="success" sx={{ ml: 2 }} />}</Typography>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleShuffle}>Сбросить</Button>
+    );
+  };
+  
+  return (
+    <Container maxWidth="xl">
+      <Box sx={{ mt: 4, mb: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/tournaments')}>
+            Назад к турнирам
+          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {canEditBracket && (
+              <Button 
+                variant="outlined" 
+                startIcon={<SaveIcon />} 
+                onClick={handleManualSave}
+                disabled={saving}
+              >
+                {saving ? 'Сохранение...' : 'Сохранить сетку'}
+              </Button>
+            )}
+            {canEditBracket && (
+              <Button 
+                variant={isEditMode ? "contained" : "outlined"} 
+                startIcon={<EditIcon />} 
+                onClick={toggleEditMode} 
+                color={isEditMode ? "success" : "primary"}
+              >
+                {isEditMode ? "Режим редактирования (Вкл)" : "Включить режим редактирования"}
+              </Button>
+            )}
+          </Box>
         </Box>
-        
-        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 4, overflowX: 'auto', pb: 2 }}>
-          {rounds.map((round) => (
-            <Box key={round.name} sx={{ minWidth: 240 }}>
-              <Typography variant="h6" align="center" gutterBottom>{round.name}</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {round.matches.map(match => renderMatch(match))}
+
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="h4" gutterBottom>{tournament.title}</Typography>
+          <Chip 
+            label={tournament.status === 'pending' ? 'Ожидает' : tournament.status === 'approved' ? 'Одобрен' : tournament.status} 
+            color={tournament.status === 'pending' ? 'warning' : 'success'} 
+            sx={{ mb: 2 }} 
+          />
+          
+          {tournament.banner_url && (
+            <Box
+              component="img"
+              src={`http://localhost:8080${tournament.banner_url}`}
+              alt={tournament.title}
+              sx={{
+                width: '100%',
+                maxHeight: 300,
+                objectFit: 'cover',
+                borderRadius: 2,
+                mb: 2,
+              }}
+              onError={(e) => {
+                const img = e.target as HTMLImageElement;
+                img.style.display = 'none';
+              }}
+            />
+          )}
+          
+          <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <EmojiEventsIcon color="primary" />
+                <Typography><strong>Игра:</strong> {tournament.game}</Typography>
               </Box>
-            </Box>
-          ))}
-        </Box>
-      </Paper>
-    </Box>
-  </Container>
-);
+              <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
+                <CalendarTodayIcon color="action" />
+                <Typography><strong>Дата начала:</strong> {new Date(tournament.start_date).toLocaleString()}</Typography>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box display="flex" alignItems="center" gap={1}>
+                <AttachMoneyIcon color="success" />
+                <Typography><strong>Призовой фонд:</strong> {tournament.prize_pool.toLocaleString()} ₽</Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={1} sx={{ mt: 1 }}>
+                <GroupsIcon color="info" />
+                <Typography><strong>Участников:</strong> {tournament.participants?.length || 0} / {tournament.max_teams}</Typography>
+              </Box>
+            </Grid>
+          </Grid>
+          
+          {tournament.description && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography><strong>Описание:</strong></Typography>
+              <Typography color="text.secondary">{tournament.description}</Typography>
+            </>
+          )}
+          
+          {champion && (
+            <Alert severity="success" sx={{ mt: 2 }} icon={<EmojiEventsIcon />}>
+              <strong>Чемпион турнира: {champion.team_name}!</strong>
+            </Alert>
+          )}
+        </Paper>
+
+        <Paper sx={{ p: 3 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+            <Typography variant="h5">
+              Сетка турнира 
+              {isEditMode && canEditBracket && (
+                <Chip label="Режим редактирования активен" size="small" color="success" sx={{ ml: 2 }} />
+              )}
+            </Typography>
+            {canEditBracket && (
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleShuffle}>
+                Сбросить
+              </Button>
+            )}
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 4, overflowX: 'auto', pb: 2 }}>
+            {rounds.map((round) => (
+              <Box key={round.name} sx={{ minWidth: 240 }}>
+                <Typography variant="h6" align="center" gutterBottom>{round.name}</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {round.matches.map(match => renderMatch(match))}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Paper>
+      </Box>
+    </Container>
+  );
 };
 
 export default TournamentDetails;

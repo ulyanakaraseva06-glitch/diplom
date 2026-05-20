@@ -71,6 +71,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Маршрут для деталей турнира - доступен и менеджеру, и организатору
+const TournamentDetailsRoute: React.FC = () => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) return <div>Загрузка...</div>;
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (user?.role !== 'manager' && user?.role !== 'organizer') {
+    return <Navigate to="/client/tournaments" />;
+  }
+  return <TournamentDetails />;
+};
+
 function AppRoutes() {
   return (
     <Routes>
@@ -141,11 +153,8 @@ function AppRoutes() {
         </AdminRoute>
       } />
       
-      <Route path="/tournaments/:id" element={
-        <AdminRoute>
-          <TournamentDetails />
-        </AdminRoute>
-      } />
+      {/* Исправленный маршрут для деталей турнира - без AdminRoute */}
+      <Route path="/tournaments/:id" element={<TournamentDetailsRoute />} />
       
       <Route path="/registrations" element={
         <AdminRoute>

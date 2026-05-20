@@ -1,11 +1,10 @@
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import UsernameWithBadge from './UsernameWithBadge';
-import { ThemeContext } from '../contexts/ThemeContext';
 import {
   AppBar,
   Toolbar,
+  Typography,
   Button,
   Box,
   Avatar,
@@ -23,30 +22,24 @@ import EmojiEvents from '@mui/icons-material/EmojiEvents';
 import Computer from '@mui/icons-material/Computer';
 import AccountBalanceWallet from '@mui/icons-material/AccountBalanceWallet';
 import Login from '@mui/icons-material/Login';
-import Home from '@mui/icons-material/Home';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 
-import { mediaUrl } from '../utils/media';
+const API = 'http://localhost:8080';
+
+const navAvatarSrc = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith('http')) return url;
+  return `${API}${url}`;
+};
 
 const NavBar: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
-  const themeCtx = useContext(ThemeContext);
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-
-  const logoFile =
-    themeCtx?.theme === 'light'
-      ? 'logo_pikmi.jpg'
-      : themeCtx?.theme === 'dark'
-        ? 'logo_bad.jpg'
-        : 'logo.jpg';
-  const logoSrc = `${process.env.PUBLIC_URL}/${logoFile}`;
 
   const hasToken = !!localStorage.getItem('token');
   const showAuth = isAuthenticated || hasToken;
   const showGuest = !showAuth;
-  const isManager = user?.role === 'manager';
-  const isClientUser = user?.role === 'user';
-  const showProfileMenu = !showGuest;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -61,16 +54,16 @@ const NavBar: React.FC = () => {
     navigate(path);
   };
 
-  const goTournaments = () => {
-    handleMenuClose();
-    navigate('/client/tournaments#tournaments', { state: { scrollToTournaments: true } });
-  };
-
   const handleLogout = () => {
     handleMenuClose();
     logout();
     navigate('/login');
   };
+
+  // Проверка ролей
+  const isUser = user?.role === 'user';
+  const isOrganizer = user?.role === 'organizer';
+  const isManager = user?.role === 'manager';
 
   return (
     <AppBar position="static">
@@ -81,7 +74,7 @@ const NavBar: React.FC = () => {
         >
           <Box
             component="img"
-            src={logoSrc}
+            src={`${process.env.PUBLIC_URL}/logo.jpg`}
             alt="GAMER.OK"
             sx={{
               height: { xs: 96, sm: 112 },
@@ -101,114 +94,77 @@ const NavBar: React.FC = () => {
         )}
 
         {showAuth && (
-          <>
-            {!isManager && (
-              <>
-                <Button
-                  color="inherit"
-                  startIcon={<Home />}
-                  onClick={() => navigate('/client/tournaments')}
-                  sx={{ mr: 1 }}
-                >
-                  Главный экран
-                </Button>
-                <Button
-                  color="inherit"
-                  startIcon={<EmojiEvents />}
-                  onClick={() => navigate('/client/all-tournaments')}
-                  sx={{ mr: 1 }}
-                >
-                  Турниры
-                </Button>
-              </>
-            )}
-            {isClientUser && (
-              <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/messenger')} sx={{ mr: 1 }}>
-                Мессенджер
-              </Button>
-            )}
-            {isClientUser && (
-              <Button color="inherit" startIcon={<Subscriptions />} onClick={() => navigate('/subscription')} sx={{ mr: 1 }}>
-                Подписка
-              </Button>
-            )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {/* Мессенджер - доступен всем авторизованным */}
+            <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/messenger')}>
+              Мессенджер
+            </Button>
 
-            {isClientUser && (
-              <Button color="inherit" startIcon={<People />} onClick={() => navigate('/friends')} sx={{ mr: 1 }}>
+            {/* Подписка - доступна всем авторизованным */}
+            <Button color="inherit" startIcon={<Subscriptions />} onClick={() => navigate('/subscription')}>
+              Подписка
+            </Button>
+
+            {/* Друзья - только для обычных пользователей */}
+            {isUser && (
+              <Button color="inherit" startIcon={<People />} onClick={() => navigate('/friends')}>
                 Друзья
               </Button>
             )}
 
-            {user?.role === 'organizer' && (
-              <>
-                <Button color="inherit" startIcon={<EmojiEvents />} onClick={() => navigate('/my-tournaments')} sx={{ mr: 1 }}>
-                  Мои турниры
-                </Button>
-                <Button color="inherit" onClick={() => navigate('/tournament-applications')} sx={{ mr: 1 }}>
-                  Заявки
-                </Button>
-              </>
+            {/* Мои турниры - для организатора */}
+            {isOrganizer && (
+              <Button color="inherit" startIcon={<EmojiEvents />} onClick={() => navigate('/my-tournaments')}>
+                Мои турниры
+              </Button>
             )}
-            {user?.role === 'manager' && (
-              <Button color="inherit" startIcon={<AdminPanelSettings />} onClick={() => navigate('/dashboard')} sx={{ mr: 1 }}>
+
+            {/* Админ-панель - только для менеджера */}
+            {isManager && (
+              <Button color="inherit" startIcon={<DashboardIcon />} onClick={() => navigate('/dashboard')}>
                 Админ-панель
               </Button>
             )}
 
-            {showProfileMenu && (
-              <>
-                <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 2 }} onClick={handleMenuOpen}>
-                  <Avatar
-                    src={mediaUrl(user?.avatar_url)}
-                    sx={{ width: 40, height: 40, mr: 1, border: '2px solid rgba(0, 212, 255, 0.5)' }}
-                  >
-                    {user?.username?.[0]?.toUpperCase() || 'U'}
-                  </Avatar>
-                  <Box sx={{ mr: 1 }}>
-                    <UsernameWithBadge
-                      username={user?.username || 'Профиль'}
-                      hasSubscription={user?.has_subscription}
-                      variant="body2"
-                    />
-                  </Box>
-                </Box>
+            {/* Аватар и меню профиля */}
+            <Box sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', ml: 1 }} onClick={handleMenuOpen}>
+              <Avatar
+                src={navAvatarSrc(user?.avatar_url)}
+                sx={{ width: 40, height: 40, mr: 1, border: '2px solid rgba(0, 212, 255, 0.5)' }}
+              >
+                {user?.username?.[0]?.toUpperCase() || 'U'}
+              </Avatar>
+              <Typography variant="body2" sx={{ mr: 1 }}>
+                {user?.username || 'Профиль'}
+              </Typography>
+            </Box>
 
-                <Menu
-                  anchorEl={anchorEl}
-                  open={Boolean(anchorEl)}
-                  onClose={handleMenuClose}
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                >
-                  <MenuItem onClick={() => go('/profile')}>
-                    <AccountCircle sx={{ mr: 1 }} /> Мой профиль
-                  </MenuItem>
-                  {isClientUser && (
-                    <MenuItem onClick={() => go('/wallet')}>
-                      <AccountBalanceWallet sx={{ mr: 1 }} /> Мой кошелёк
-                    </MenuItem>
-                  )}
-                  <MenuItem onClick={() => go('/themes')}>
-                    <Computer sx={{ mr: 1 }} /> Темы
-                  </MenuItem>
-                  {!isManager && (
-                    <MenuItem onClick={goTournaments}>
-                      <EmojiEvents sx={{ mr: 1 }} /> Турниры
-                    </MenuItem>
-                  )}
-                  {isManager && (
-                    <MenuItem onClick={() => go('/dashboard')}>
-                      <AdminPanelSettings sx={{ mr: 1 }} /> Админ-панель
-                    </MenuItem>
-                  )}
-                  <Divider />
-                  <MenuItem onClick={handleLogout}>
-                    <Logout sx={{ mr: 1 }} /> Выйти
-                  </MenuItem>
-                </Menu>
-              </>
-            )}
-          </>
+            {/* Выпадающее меню */}
+            <Menu
+              anchorEl={anchorEl}
+              open={Boolean(anchorEl)}
+              onClose={handleMenuClose}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={() => go('/profile')}>
+                <AccountCircle sx={{ mr: 1 }} /> Мой профиль
+              </MenuItem>
+              <MenuItem onClick={() => go('/wallet')}>
+                <AccountBalanceWallet sx={{ mr: 1 }} /> Мой кошелёк
+              </MenuItem>
+              <MenuItem onClick={() => go('/themes')}>
+                <Computer sx={{ mr: 1 }} /> Темы
+              </MenuItem>
+              <MenuItem onClick={() => go('/client/tournaments')}>
+                <EmojiEvents sx={{ mr: 1 }} /> Турниры
+              </MenuItem>
+              <Divider />
+              <MenuItem onClick={handleLogout}>
+                <Logout sx={{ mr: 1 }} /> Выйти
+              </MenuItem>
+            </Menu>
+          </Box>
         )}
       </Toolbar>
     </AppBar>

@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"esports-manager/internal/middleware"
 	"esports-manager/internal/models"
 	"esports-manager/internal/repository"
+	"esports-manager/internal/neo4j"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -22,6 +24,7 @@ type ClientHandler struct {
 	tournamentRepo   *repository.TournamentRepository
 	registrationRepo *repository.RegistrationRepository
     banRepo          *repository.BanRepository  
+	neo4jClient      *neo4j.Neo4jClient 
 }
 
 func NewClientHandler(
@@ -31,12 +34,14 @@ func NewClientHandler(
 	tournamentRepo *repository.TournamentRepository,
 	registrationRepo *repository.RegistrationRepository,
     banRepo *repository.BanRepository, 
+	neo4jClient *neo4j.Neo4jClient,
 ) *ClientHandler {
 	return &ClientHandler{
 		mongoDB: mongoDB, userRepo: userRepo,
 		supportRepo: supportRepo, tournamentRepo: tournamentRepo,
 		registrationRepo: registrationRepo,
-         banRepo:          banRepo, 
+        banRepo:          banRepo, 
+		neo4jClient:      neo4jClient, 
 	}
 }
 // GetUserTheme - получение темы пользователя
@@ -191,67 +196,212 @@ func (h *ClientHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UpdateProfileGameCards — сохранение карточек игр в MongoDB
+// UpdateProfileGameCards — сохранение карточек игр в MongoDB и синхронизация с Neo4j
 func (h *ClientHandler) UpdateProfileGameCards(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	if h.mongoDB == nil {
-		http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
-		return
-	}
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    if h.mongoDB == nil {
+        http.Error(w, "MongoDB unavailable", http.StatusServiceUnavailable)
+        return
+    }
 
-	var req struct {
-		GameCards []models.GameCard `json:"game_cards"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
+    var req struct {
+        GameCards []models.GameCard `json:"game_cards"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
 
-	for i := range req.GameCards {
-		if req.GameCards[i].Game == "" {
-			http.Error(w, "Game name is required in each card", http.StatusBadRequest)
-			return
-		}
-		if len(req.GameCards[i].Comment) > 500 {
-			http.Error(w, "Comment must be at most 500 characters", http.StatusBadRequest)
-			return
-		}
-		if req.GameCards[i].ID == "" {
-			req.GameCards[i].ID = newMongoID()
-		}
-	}
+    // Валидация
+    for i := range req.GameCards {
+        if req.GameCards[i].Game == "" {
+            http.Error(w, "Game name is required in each card", http.StatusBadRequest)
+            return
+        }
+        if len(req.GameCards[i].Comment) > 500 {
+            http.Error(w, "Comment must be at most 500 characters", http.StatusBadRequest)
+            return
+        }
+        if req.GameCards[i].ID == "" {
+            req.GameCards[i].ID = newMongoID()
+        }
+    }
 
-	if _, err := h.ensureMongoUser(r.Context(), userID); err != nil {
-		log.Printf("UpdateProfileGameCards: ensureMongoUser %d: %v", userID, err)
-		http.Error(w, "Failed to prepare profile", http.StatusInternalServerError)
-		return
-	}
+    // Создаём/обновляем профиль в MongoDB
+    if _, err := h.ensureMongoUser(r.Context(), userID); err != nil {
+        log.Printf("UpdateProfileGameCards: ensureMongoUser %d: %v", userID, err)
+        http.Error(w, "Failed to prepare profile", http.StatusInternalServerError)
+        return
+    }
 
-	setFields := bson.M{
-		"id":         userID,
-		"game_cards": req.GameCards,
-	}
-	if pgUser, err := h.userRepo.FindByID(r.Context(), userID); err == nil && pgUser != nil {
-		setFields["email"] = pgUser.Email
-	}
+    setFields := bson.M{
+        "id":         userID,
+        "game_cards": req.GameCards,
+    }
+    if pgUser, err := h.userRepo.FindByID(r.Context(), userID); err == nil && pgUser != nil {
+        setFields["email"] = pgUser.Email
+    }
 
-	_, err := h.mongoDB.Collection("users").UpdateOne(
-		r.Context(),
-		bson.M{"id": userID},
-		bson.M{"$set": setFields},
-	)
-	if err != nil {
-		log.Printf("UpdateProfileGameCards: update %d: %v", userID, err)
-		http.Error(w, "Failed to update profile", http.StatusInternalServerError)
-		return
-	}
+    _, err := h.mongoDB.Collection("users").UpdateOne(
+        r.Context(),
+        bson.M{"id": userID},
+        bson.M{"$set": setFields},
+    )
+    if err != nil {
+        log.Printf("UpdateProfileGameCards: update %d: %v", userID, err)
+        http.Error(w, "Failed to update profile", http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"game_cards": req.GameCards})
+    // =====================================================
+    // СИНХРОНИЗАЦИЯ С NEO4J
+    // =====================================================
+    if h.neo4jClient != nil {
+        // Получаем данные пользователя из PostgreSQL
+        user, err := h.userRepo.FindByID(r.Context(), userID)
+        if err != nil {
+            log.Printf("UpdateProfileGameCards: failed to get user %d from PG: %v", userID, err)
+        }
+
+        // Получаем дополнительные поля из MongoDB
+        var userMongo models.UserMongo
+        if err := h.mongoDB.Collection("users").FindOne(r.Context(), bson.M{"id": userID}).Decode(&userMongo); err != nil {
+            log.Printf("UpdateProfileGameCards: failed to get user %d from MongoDB: %v", userID, err)
+        }
+
+        // Определяем MMR (уровень мастерства) на основе количества игр и баланса
+        mmr := 1500 // базовое значение
+        if len(req.GameCards) > 0 {
+            mmr = 1500 + len(req.GameCards)*50
+        }
+        if userMongo.Balance > 0 {
+            mmr += int(userMongo.Balance) / 100
+        }
+        if mmr > 5000 {
+            mmr = 5000 // ограничиваем максимальный MMR
+        }
+
+        // Определяем город (можно расширить позже)
+        city := ""
+        if len(userMongo.Achievements) > 0 {
+            // Заглушка - можно добавить отдельное поле city в профиль
+            city = "Moscow"
+        }
+
+        // Определяем предпочитаемую роль из комментариев к играм
+        role := determineRoleFromGameCards(req.GameCards)
+
+        // 1. Создаём/обновляем узел пользователя в Neo4j
+        if user != nil {
+            err = h.neo4jClient.CreateUserNode(
+                r.Context(),
+                userID,
+                user.Username,
+                user.Email,
+                city,
+                role,
+                mmr,
+            )
+            if err != nil {
+                log.Printf("UpdateProfileGameCards: failed to create/update user node in Neo4j: %v", err)
+            } else {
+                log.Printf("UpdateProfileGameCards: user %d (%s) synced to Neo4j with MMR=%d, role=%s", 
+                    userID, user.Username, mmr, role)
+            }
+        }
+
+        // 2. Добавляем связи INTERESTED_IN для каждой игры
+        for _, card := range req.GameCards {
+            if card.Game != "" {
+                level := "amateur" // уровень по умолчанию
+                // Определяем уровень на основе ранга/комментария
+                rankLower := strings.ToLower(card.Rank)
+                commentLower := strings.ToLower(card.Comment)
+                
+                if rankLower == "pro" || rankLower == "professional" || 
+                   strings.Contains(commentLower, "pro") || strings.Contains(commentLower, "профи") {
+                    level = "professional"
+                } else if rankLower == "semi-pro" || rankLower == "полупрофи" {
+                    level = "semi-professional"
+                }
+                
+                err = h.neo4jClient.UpdateUserGameInterest(r.Context(), userID, card.Game, level)
+                if err != nil {
+                    log.Printf("UpdateProfileGameCards: failed to add game interest %s for user %d: %v", 
+                        card.Game, userID, err)
+                } else {
+                    log.Printf("UpdateProfileGameCards: added interest %s -> %s (level: %s)", 
+                        user.Username, card.Game, level)
+                }
+            }
+        }
+
+        log.Printf("UpdateProfileGameCards: sync to Neo4j completed for user %d", userID)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{"game_cards": req.GameCards})
+}
+
+// determineRoleFromGameCards - определяет предпочитаемую роль из игровых карточек
+func determineRoleFromGameCards(cards []models.GameCard) string {
+    // Анализируем комментарии и ранги для определения роли
+    roles := map[string]int{
+        "carry":    0,
+        "mid":      0,
+        "offlane":  0,
+        "support":  0,
+        "jungle":   0,
+        "sniper":   0,
+        "medic":    0,
+        "tank":     0,
+    }
+    
+    for _, card := range cards {
+        comment := strings.ToLower(card.Comment)
+        rank := strings.ToLower(card.Rank)
+        
+        if strings.Contains(comment, "carry") || strings.Contains(rank, "carry") {
+            roles["carry"]++
+        }
+        if strings.Contains(comment, "mid") || strings.Contains(comment, "мид") {
+            roles["mid"]++
+        }
+        if strings.Contains(comment, "offlane") || strings.Contains(comment, "оффлейн") {
+            roles["offlane"]++
+        }
+        if strings.Contains(comment, "support") || strings.Contains(comment, "саппорт") {
+            roles["support"]++
+        }
+        if strings.Contains(comment, "jungle") || strings.Contains(comment, "джунгл") {
+            roles["jungle"]++
+        }
+        if strings.Contains(comment, "sniper") || strings.Contains(comment, "снайпер") {
+            roles["sniper"]++
+        }
+        if strings.Contains(comment, "medic") || strings.Contains(comment, "медик") {
+            roles["medic"]++
+        }
+        if strings.Contains(comment, "tank") || strings.Contains(comment, "танк") {
+            roles["tank"]++
+        }
+    }
+    
+    // Находим роль с максимальным количеством упоминаний
+    maxRole := "carry" // значение по умолчанию
+    maxCount := 0
+    for role, count := range roles {
+        if count > maxCount {
+            maxCount = count
+            maxRole = role
+        }
+    }
+    
+    return maxRole
 }
 
 // UpdateProfileAvatar — URL аватара в MongoDB
@@ -298,6 +448,41 @@ func (h *ClientHandler) UpdateProfileAvatar(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"avatar_url": req.AvatarURL})
+}
+
+func (h *ClientHandler) GetRecommendations(w http.ResponseWriter, r *http.Request) {
+    userID, ok := middleware.GetUserID(r.Context())
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    if h.neo4jClient == nil {
+        http.Error(w, "Neo4j unavailable", http.StatusServiceUnavailable)
+        return
+    }
+
+    limit := 10
+
+    recommendations, err := h.neo4jClient.GetRecommendations(
+        r.Context(),
+        userID,
+        limit,
+    )
+
+    if err != nil {
+        log.Printf("GetRecommendations error: %v", err)
+        http.Error(w, "Failed to get recommendations", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+
+    if recommendations == nil {
+        recommendations = []neo4j.Recommendation{}
+    }
+
+    json.NewEncoder(w).Encode(recommendations)
 }
 
 // GetFriends - список друзей пользователя

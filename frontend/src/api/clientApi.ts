@@ -179,6 +179,16 @@ export interface MySubscriptionsResponse {
   has_active: boolean;
 }
 
+export interface Recommendation {
+  user_id: string;
+  nickname: string;
+  mmr: number;
+  role: string;
+  common_games: number;
+  mutual_friends: number;
+  score: number;
+}
+
 function isSubscriptionActive(sub: UserSubscription | null | undefined): boolean {
   if (!sub) return false;
   if (sub.is_active === false) return false;
@@ -466,4 +476,8 @@ export const clientApi = {
       headers: authHeaders(),
       body: JSON.stringify({ score }),
     }).then(handleJson<{ best_score: number; improved: boolean }>),
+
+  getRecommendations: (limit: number = 10): Promise<Recommendation[]> =>
+  fetch(`${API}/client/recommendations?limit=${limit}`, { headers: authHeaders() })
+    .then(handleJsonArray<Recommendation>),
 };
