@@ -31,7 +31,7 @@ import ChatIcon from '@mui/icons-material/Chat';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 const Dashboard: React.FC = () => {
-  const { user, isManager, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalTournaments: 0,
@@ -41,37 +41,36 @@ const Dashboard: React.FC = () => {
     unreadMessages: 0,
   });
 
-const loadStats = async () => {
-  try {
-    const tournamentsRes = await tournamentsApi.getAll();
-    const allTournaments = tournamentsRes.data || [];
-    const pendingTournaments = allTournaments.filter((t: any) => t.status === 'pending');
-
-    const usersRes = await usersApi.getAll();
-    const users = usersRes.data || [];
-
-    // Получаем статистику через новый API /stats
-    let totalRegistrations = 0;
-    let unreadMessages = 0;
+  const loadStats = async () => {
     try {
-      const statsRes = await apiClient.get('/stats');
-      totalRegistrations = statsRes.data.total_registrations || 0;
-      unreadMessages = statsRes.data.unread_messages || 0;
-    } catch (e) {
-      console.error('Ошибка загрузки статистики заявок/сообщений', e);
-    }
+      const tournamentsRes = await tournamentsApi.getAll();
+      const allTournaments = tournamentsRes.data || [];
+      const pendingTournaments = allTournaments.filter((t: { status: string }) => t.status === 'pending');
 
-    setStats({
-      totalTournaments: allTournaments.length,
-      pendingTournaments: pendingTournaments.length,
-      totalUsers: users.length,
-      totalRegistrations: totalRegistrations,
-      unreadMessages: unreadMessages,
-    });
-  } catch (err) {
-    console.error('Ошибка загрузки статистики', err);
-  }
-};
+      const usersRes = await usersApi.getAll();
+      const users = usersRes.data || [];
+
+      let totalRegistrations = 0;
+      let unreadMessages = 0;
+      try {
+        const statsRes = await apiClient.get('/stats');
+        totalRegistrations = statsRes.data.total_registrations || 0;
+        unreadMessages = statsRes.data.unread_messages || 0;
+      } catch (e) {
+        console.error('Ошибка загрузки статистики заявок/сообщений', e);
+      }
+
+      setStats({
+        totalTournaments: allTournaments.length,
+        pendingTournaments: pendingTournaments.length,
+        totalUsers: users.length,
+        totalRegistrations,
+        unreadMessages,
+      });
+    } catch (err) {
+      console.error('Ошибка загрузки статистики', err);
+    }
+  };
 
   useEffect(() => {
     loadStats();
@@ -87,22 +86,12 @@ const loadStats = async () => {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                    <Box
-  component="img"
-  src="/images/adminn.png"
-  alt="Логотип"
-  sx={{ height: 110 }}
-/>
+            <Box component="img" src="/images/adminn.png" alt="Логотип" sx={{ height: 110 }} />
           </Typography>
           <Typography variant="body2" sx={{ mr: 2 }}>
-            {user?.username} ({user?.role === 'manager' ? 'Менеджер' : user?.role === 'organizer' ? 'Организатор' : 'Игрок'})
+            {user?.username} (Менеджер)
           </Typography>
-          <Button
-            color="inherit"
-            startIcon={<ComputerIcon />}
-            onClick={() => navigate('/themes')}
-            sx={{ mr: 1 }}
-          >
+          <Button color="inherit" startIcon={<ComputerIcon />} onClick={() => navigate('/themes')} sx={{ mr: 1 }}>
             Темы
           </Button>
           <IconButton color="inherit" onClick={handleLogout}>
@@ -117,7 +106,6 @@ const loadStats = async () => {
             Добро пожаловать, {user?.username}!
           </Typography>
 
-          {/* Статистика - карточки */}
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Paper sx={{ p: 2, textAlign: 'center' }}>
@@ -155,9 +143,7 @@ const loadStats = async () => {
               </Paper>
             </Grid>
           </Grid>
-          
 
-          {/* Карточки навигации */}
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, md: 4 }}>
               <Card sx={{ height: '100%' }}>
@@ -173,91 +159,92 @@ const loadStats = async () => {
                 </CardContent>
               </Card>
             </Grid>
-            
-            {isManager && (
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <AssignmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-                    <Typography variant="h6">Заявки от участников</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Заявки игроков и команд на турниры
-                    </Typography>
-                    <Button variant="contained" color="warning" onClick={() => navigate('/registrations')}>
-                      Перейти
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-            
-            {isManager && (
-              <>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <BlockIcon sx={{ fontSize: 40, color: 'error.main', mb: 1 }} />
-                      <Typography variant="h6">Блокировки</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Управление блокировками пользователей
-                      </Typography>
-                      <Button variant="contained" color="error" onClick={() => navigate('/bans')}>
-                        Перейти
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </Grid>
-{isManager && (
-  <Grid size={{ xs: 12, md: 4 }}>
-    <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <HistoryIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-        <Typography variant="h6">Логи действий</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Просмотр истории действий менеджеров
-        </Typography>
-        <Button variant="contained" color="info" onClick={() => navigate('/logs')}>
-          Перейти
-        </Button>
-      </CardContent>
-    </Card>
-  </Grid>
-)}
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <SupportAgentIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
-                      <Typography variant="h6">Чат поддержки</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Общение с пользователями в реальном времени
-                      </Typography>
-                      <Button variant="contained" color="success" onClick={() => navigate('/support')}>
-                        Перейти
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </Grid>
 
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Card sx={{ height: '100%' }}>
-                    <CardContent>
-                      <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
-                      <Typography variant="h6">Пополнения кошелька</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Подтверждение оплат по СБП
-                      </Typography>
-                      <Button variant="contained" color="info" onClick={() => navigate('/wallet-payments')}>
-                        Перейти
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Box sx={{ mb: 6 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <AssignmentIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
+                  <Typography variant="h6">Заявки от участников</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Заявки игроков и команд на турниры
+                  </Typography>
+                  <Button variant="contained" color="warning" onClick={() => navigate('/registrations')}>
+                    Перейти
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <BlockIcon sx={{ fontSize: 40, color: 'error.main', mb: 1 }} />
+                  <Typography variant="h6">Блокировки</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Управление блокировками пользователей
+                  </Typography>
+                  <Button variant="contained" color="error" onClick={() => navigate('/bans')}>
+                    Перейти
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <HistoryIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                  <Typography variant="h6">Логи действий</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Просмотр истории действий менеджеров
+                  </Typography>
+                  <Button variant="contained" color="info" onClick={() => navigate('/logs')}>
+                    Перейти
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <SupportAgentIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
+                  <Typography variant="h6">Чат поддержки</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Общение с пользователями в реальном времени
+                  </Typography>
+                  <Button variant="contained" color="success" onClick={() => navigate('/support')}>
+                    Перейти
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 4 }}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <AccountBalanceWalletIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
+                  <Typography variant="h6">Пополнения кошелька</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Подтверждение оплат по СБП
+                  </Typography>
+                  <Button variant="contained" color="info" onClick={() => navigate('/wallet-payments')}>
+                    Перейти
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={3} sx={{ mt: 2 }}>
+            <Grid size={{ xs: 12 }}>
+              <Paper sx={{ p: 2, height: 520, overflow: 'auto' }}>
                 <EventCalendar />
-              </Box>
+              </Paper>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
               <Analytics />
-              </>
-            )}
+            </Grid>
           </Grid>
         </Box>
       </Container>

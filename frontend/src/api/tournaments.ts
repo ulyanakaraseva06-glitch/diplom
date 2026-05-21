@@ -2,7 +2,7 @@ import { apiClient } from './client';
 import { Tournament, TournamentCreate, TournamentUpdate, TournamentWithParticipants } from '../types';
 
 export const tournamentsApi = {
-  getAll: (params?: { game?: string; status?: string }) =>
+  getAll: (params?: { game?: string; status?: string; limit?: number; offset?: number }) =>
     apiClient.get<Tournament[]>('/tournaments', { params }),
 
   getById: (id: number) =>

@@ -56,6 +56,25 @@ export interface DragonRunnerLeaderboardEntry {
   score: number;
 }
 
+export interface Recommendation {
+  user_id: string;
+  nickname: string;
+  mmr: number;
+  role: string;
+  common_games: number;
+  mutual_friends: number;
+  score: number;
+}
+
+export interface TeamMemberRecommendation {
+  user_id: string;
+  nickname: string;
+  mmr: number;
+  role: string;
+  common_games: number;
+  score: number;
+}
+
 export interface FriendRequestItem {
   id: string;
   from_user_id: number;
@@ -474,4 +493,16 @@ export const clientApi = {
       headers: authHeaders(),
       body: JSON.stringify({ score }),
     }).then(handleJson<{ best_score: number; improved: boolean }>),
+
+  getRecommendations: (limit = 10) =>
+    fetch(`${API}/client/recommendations?limit=${limit}`, { headers: authHeaders() }).then(
+      handleJsonArray<Recommendation>
+    ),
+
+  getTeamMemberRecommendations: (teamId?: string, limit = 10) => {
+    const q = teamId ? `?team_id=${encodeURIComponent(teamId)}&limit=${limit}` : `?limit=${limit}`;
+    return fetch(`${API}/client/recommendations/team-members${q}`, { headers: authHeaders() }).then(
+      handleJsonArray<TeamMemberRecommendation>
+    );
+  },
 };

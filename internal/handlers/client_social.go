@@ -56,6 +56,8 @@ func (h *ClientHandler) RemoveFriend(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	syncFriendshipToNeo4j(ctx, h.neo4jClient, userID, friendID, false)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Friend removed"})
 }

@@ -192,6 +192,8 @@ func (h *ClientHandler) CreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	syncTeamToNeo4j(r.Context(), h.neo4jClient, team.ID, team.Name, members)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(h.teamToView(r.Context(), &team, userID))
@@ -279,6 +281,12 @@ func (h *ClientHandler) UpdateTeam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load team", http.StatusInternalServerError)
 		return
 	}
+
+	teamName := updated.Name
+	if req.Name != "" {
+		teamName = req.Name
+	}
+	syncTeamToNeo4j(r.Context(), h.neo4jClient, teamID, teamName, members)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(h.teamToView(r.Context(), updated, userID))

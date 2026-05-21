@@ -144,9 +144,9 @@ function AppRoutes() {
       } />
       
       <Route path="/tournaments/:id" element={
-        <AdminRoute>
+        <StaffRoute>
           <TournamentDetails />
-        </AdminRoute>
+        </StaffRoute>
       } />
       
       <Route path="/registrations" element={

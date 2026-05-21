@@ -77,6 +77,7 @@ const Login: React.FC = () => {
     setTimeout(() => {
       const role = JSON.parse(localStorage.getItem('user') || '{}')?.role;
       if (role === 'manager') navigate('/dashboard');
+      else if (role === 'organizer') navigate('/my-tournaments');
       else navigate('/client/tournaments');
     }, 800);
   } catch (err: unknown) {

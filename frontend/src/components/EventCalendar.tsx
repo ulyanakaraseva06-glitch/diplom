@@ -156,7 +156,7 @@ const EventCalendar: React.FC = () => {
   }));
 
   return (
-    <Box sx={{ height: 500, mb: 4, position: 'relative' }}>
+    <Box sx={{ height: 460, position: 'relative' }}>
       {loading && (
         <Box
           sx={{

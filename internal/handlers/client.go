@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"esports-manager/internal/middleware"
 	"esports-manager/internal/models"
+	"esports-manager/internal/neo4j"
 	"esports-manager/internal/repository"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -29,6 +31,7 @@ type ClientHandler struct {
 	tournamentRepo   *repository.TournamentRepository
 	registrationRepo *repository.RegistrationRepository
 	banRepo          *repository.BanRepository
+	neo4jClient      *neo4j.Neo4jClient
 }
 
 func NewClientHandler(
@@ -39,12 +42,13 @@ func NewClientHandler(
 	tournamentRepo *repository.TournamentRepository,
 	registrationRepo *repository.RegistrationRepository,
 	banRepo *repository.BanRepository,
+	neo4jClient *neo4j.Neo4jClient,
 ) *ClientHandler {
 	return &ClientHandler{
 		mongoDB: mongoDB, userRepo: userRepo,
 		supportRepo: supportRepo, supportNotifier: supportNotifier,
 		tournamentRepo: tournamentRepo, registrationRepo: registrationRepo,
-		banRepo: banRepo,
+		banRepo: banRepo, neo4jClient: neo4jClient,
 	}
 }
 // GetUserTheme - получение темы пользователя
@@ -258,8 +262,73 @@ func (h *ClientHandler) UpdateProfileGameCards(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	SyncUserProfileToNeo4j(r.Context(), h.neo4jClient, h.userRepo, h.mongoDB, userID, req.GameCards)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"game_cards": req.GameCards})
+}
+
+// GetRecommendations — рекомендации друзей из Neo4j.
+func (h *ClientHandler) GetRecommendations(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if h.neo4jClient == nil {
+		http.Error(w, "Neo4j unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	limit := 10
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 50 {
+			limit = n
+		}
+	}
+	recommendations, err := h.neo4jClient.GetFriendRecommendations(r.Context(), userID, limit)
+	if err != nil {
+		log.Printf("GetRecommendations: %v", err)
+		http.Error(w, "Failed to get recommendations", http.StatusInternalServerError)
+		return
+	}
+	if recommendations == nil {
+		recommendations = []neo4j.Recommendation{}
+	}
+	recommendations = filterFriendRecommendations(
+		recommendations,
+		h.getFriendIDSet(r.Context(), userID),
+		h.getPendingRequestPairs(r.Context(), userID),
+	)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recommendations)
+}
+
+// GetTeamRecommendations — рекомендации участников для команды.
+func (h *ClientHandler) GetTeamRecommendations(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if h.neo4jClient == nil {
+		http.Error(w, "Neo4j unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	teamID := r.URL.Query().Get("team_id")
+	limit := 10
+	recs, err := h.neo4jClient.GetTeamMemberRecommendations(r.Context(), userID, teamID, limit)
+	if err != nil {
+		log.Printf("GetTeamRecommendations: %v", err)
+		http.Error(w, "Failed to get team recommendations", http.StatusInternalServerError)
+		return
+	}
+	if recs == nil {
+		recs = []neo4j.TeamMemberRecommendation{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recs)
 }
 
 // UpdateProfileAvatar — URL аватара в MongoDB

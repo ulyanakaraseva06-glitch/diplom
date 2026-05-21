@@ -280,15 +280,12 @@ func (h *ClientHandler) SendFriendRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	count, _ := h.mongoDB.Collection("friend_requests").CountDocuments(r.Context(), bson.M{
-		"status": "pending",
-		"$or": []bson.M{
-			{"from_user_id": userID, "to_user_id": req.FriendID},
-			{"from_user_id": req.FriendID, "to_user_id": userID},
-		},
-	})
-	if count > 0 {
-		http.Error(w, "Request already exists", http.StatusConflict)
+	switch h.getPendingRequestPairs(r.Context(), userID)[req.FriendID] {
+	case "incoming":
+		http.Error(w, "Incoming friend request pending", http.StatusConflict)
+		return
+	case "sent":
+		http.Error(w, "Friend request already sent", http.StatusConflict)
 		return
 	}
 
@@ -365,6 +362,7 @@ func (h *ClientHandler) RespondFriendRequest(w http.ResponseWriter, r *http.Requ
 		}
 		h.createNotification(r.Context(), fr.FromUserID, "friend_accepted", "Заявка принята",
 			toName+" принял(а) вашу заявку в друзья", req.RequestID)
+		syncFriendshipToNeo4j(r.Context(), h.neo4jClient, userID, fr.FromUserID, true)
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{"status": status})

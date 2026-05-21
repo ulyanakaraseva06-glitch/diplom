@@ -45,7 +45,9 @@ const NavBar: React.FC = () => {
   const showAuth = isAuthenticated || hasToken;
   const showGuest = !showAuth;
   const isManager = user?.role === 'manager';
+  const isOrganizer = user?.role === 'organizer';
   const isClientUser = user?.role === 'user';
+  const showMessenger = isClientUser || isOrganizer;
   const showProfileMenu = !showGuest;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -122,7 +124,7 @@ const NavBar: React.FC = () => {
                 </Button>
               </>
             )}
-            {isClientUser && (
+            {showMessenger && (
               <Button color="inherit" startIcon={<Chat />} onClick={() => navigate('/messenger')} sx={{ mr: 1 }}>
                 Мессенджер
               </Button>
@@ -139,7 +141,7 @@ const NavBar: React.FC = () => {
               </Button>
             )}
 
-            {user?.role === 'organizer' && (
+            {isOrganizer && (
               <>
                 <Button color="inherit" startIcon={<EmojiEvents />} onClick={() => navigate('/my-tournaments')} sx={{ mr: 1 }}>
                   Мои турниры
@@ -199,6 +201,11 @@ const NavBar: React.FC = () => {
                   {isManager && (
                     <MenuItem onClick={() => go('/dashboard')}>
                       <AdminPanelSettings sx={{ mr: 1 }} /> Админ-панель
+                    </MenuItem>
+                  )}
+                  {isOrganizer && (
+                    <MenuItem onClick={() => go('/messenger')}>
+                      <Chat sx={{ mr: 1 }} /> Мессенджер
                     </MenuItem>
                   )}
                   <Divider />

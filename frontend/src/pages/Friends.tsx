@@ -28,6 +28,7 @@ import {
   ListItemButton,
   ListItemText,
   Checkbox,
+  Paper,
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import CheckIcon from '@mui/icons-material/Check';
@@ -42,10 +43,22 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import NavBar from '../components/NavBar';
 import UsernameWithBadge from '../components/UsernameWithBadge';
 import BoltIcon from '@mui/icons-material/Bolt';
+import RecommendIcon from '@mui/icons-material/Recommend';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SportsEsportsIcon from '@mui/icons-material/SportsEsports';
 import UserProfileDialog from '../components/UserProfileDialog';
-import { clientApi, PlayerUser, FriendRequestItem, Team, PublicProfile } from '../api/clientApi';
+import {
+  clientApi,
+  PlayerUser,
+  FriendRequestItem,
+  Team,
+  PublicProfile,
+  Recommendation,
+  TeamMemberRecommendation,
+} from '../api/clientApi';
 import { mediaUrl } from '../utils/media';
 import { confirmDelete } from '../utils/confirmDelete';
+import { friendRequestErrorMessage, parseNeo4jUserId } from '../utils/friendRequest';
 
 const Friends: React.FC = () => {
   const navigate = useNavigate();
@@ -70,6 +83,31 @@ const Friends: React.FC = () => {
   const [teamAvatarPreview, setTeamAvatarPreview] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
   const [pickFriendsOpen, setPickFriendsOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [teamRecommendations, setTeamRecommendations] = useState<TeamMemberRecommendation[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState<string | null>(null);
+
+  const loadRecommendations = useCallback(async () => {
+    setLoadingRecs(true);
+    try {
+      const data = await clientApi.getRecommendations();
+      setRecommendations(Array.isArray(data) ? data : []);
+    } catch {
+      setRecommendations([]);
+    } finally {
+      setLoadingRecs(false);
+    }
+  }, []);
+
+  const loadTeamRecommendations = useCallback(async (teamId?: string) => {
+    try {
+      const data = await clientApi.getTeamMemberRecommendations(teamId);
+      setTeamRecommendations(Array.isArray(data) ? data : []);
+    } catch {
+      setTeamRecommendations([]);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,6 +133,18 @@ const Friends: React.FC = () => {
   useEffect(() => {
     load();
   }, [tab, load]);
+
+  useEffect(() => {
+    if (tab === 4) {
+      loadRecommendations();
+    }
+  }, [tab, loadRecommendations]);
+
+  useEffect(() => {
+    if (tab === 3) {
+      loadTeamRecommendations(editTeam?.id);
+    }
+  }, [tab, editTeam?.id, loadTeamRecommendations]);
 
   useEffect(() => {
     clientApi.getNotifications().then((list) => {
@@ -128,8 +178,9 @@ const Friends: React.FC = () => {
       await clientApi.sendFriendRequest(id);
       setSnack('Заявка отправлена');
       load();
-    } catch (e: any) {
-      setSnack(e.message?.includes('exists') ? 'Заявка уже отправлена' : 'Ошибка отправки');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      setSnack(friendRequestErrorMessage(msg));
     }
   };
 
@@ -138,6 +189,7 @@ const Friends: React.FC = () => {
       await clientApi.respondFriendRequest(requestId, accept);
       setSnack(accept ? 'Друг добавлен' : 'Заявка отклонена');
       load();
+      if (accept) loadRecommendations();
     } catch {
       setSnack('Ошибка');
     }
@@ -149,8 +201,36 @@ const Friends: React.FC = () => {
       await clientApi.removeFriend(id);
       setSnack('Друг удалён');
       load();
+      if (tab === 4) loadRecommendations();
     } catch {
       setSnack('Не удалось удалить друга');
+    }
+  };
+
+  const sendRequestFromRecommendation = async (userId: string) => {
+    const numericId = parseNeo4jUserId(userId);
+    if (numericId == null) return;
+    setSendingRequest(userId);
+    try {
+      await clientApi.sendFriendRequest(numericId);
+      setRecommendations((prev) => prev.filter((r) => r.user_id !== userId));
+      setSnack('Заявка отправлена');
+      void loadRecommendations();
+      void load();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      setSnack(friendRequestErrorMessage(msg));
+    } finally {
+      setSendingRequest(null);
+    }
+  };
+
+  const addRecommendedToTeam = (userId: string) => {
+    const numericId = parseNeo4jUserId(userId);
+    if (numericId == null) return;
+    if (!selectedMembers.includes(numericId)) {
+      setSelectedMembers((prev) => [...prev, numericId]);
+      setSnack('Игрок добавлен в состав');
     }
   };
 
@@ -260,9 +340,10 @@ const Friends: React.FC = () => {
             <Tab label="Заявки" />
             <Tab label="Поиск" />
             <Tab label="Команда" icon={<GroupsIcon />} iconPosition="start" />
+            <Tab label="Рекомендации" icon={<RecommendIcon />} iconPosition="start" />
           </Tabs>
 
-          {tab !== 3 && (
+          {tab !== 3 && tab !== 4 && (
             <Tooltip title="Введите никнейм для фильтрации списка">
               <TextField
                 fullWidth
@@ -475,6 +556,111 @@ const Friends: React.FC = () => {
                   >
                     Создать команду
                   </Button>
+
+                  {teamRecommendations.length > 0 && (
+                    <Box sx={{ mt: 4 }}>
+                      <Typography variant="h6" gutterBottom>
+                        Рекомендуемые участники для команды
+                      </Typography>
+                      <Grid container spacing={2}>
+                        {teamRecommendations.map((rec) => (
+                          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={rec.user_id}>
+                            <Card>
+                              <CardContent>
+                                <Typography variant="subtitle1" fontWeight={600}>
+                                  {rec.nickname}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Общих игр: {rec.common_games} · MMR: {rec.mmr}
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  sx={{ mt: 1 }}
+                                  onClick={() => {
+                                    openCreateTeam();
+                                    addRecommendedToTeam(rec.user_id);
+                                  }}
+                                >
+                                  В новую команду
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {tab === 4 && (
+                <Box>
+                  {loadingRecs ? (
+                    <Box display="flex" justifyContent="center" py={6}>
+                      <CircularProgress />
+                    </Box>
+                  ) : recommendations.length === 0 ? (
+                    <Paper sx={{ p: 4, textAlign: 'center' }}>
+                      <RecommendIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+                      <Typography variant="h6" color="text.secondary" gutterBottom>
+                        Нет рекомендаций
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Заполните игры в профиле — Neo4j подберёт игроков с похожими интересами.
+                      </Typography>
+                      <Button variant="contained" sx={{ mt: 2 }} onClick={() => navigate('/profile')}>
+                        Заполнить профиль
+                      </Button>
+                    </Paper>
+                  ) : (
+                    <Grid container spacing={2}>
+                      {recommendations.map((rec) => (
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={rec.user_id}>
+                          <Card sx={{ height: '100%' }}>
+                            <CardContent>
+                              <Box display="flex" alignItems="center" gap={2} mb={2}>
+                                <Avatar sx={{ bgcolor: 'secondary.main', width: 56, height: 56 }}>
+                                  {rec.nickname?.charAt(0)?.toUpperCase() || '?'}
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="h6" fontWeight={600}>
+                                    {rec.nickname}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Совместимость: {Math.round(rec.score)}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                                <Chip icon={<TrendingUpIcon />} label={`MMR: ${rec.mmr}`} color="primary" size="small" />
+                                <Chip
+                                  icon={<SportsEsportsIcon />}
+                                  label={rec.role || 'роль не указана'}
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              </Box>
+                              <Typography variant="body2" color="text.secondary">
+                                Общих игр: {rec.common_games}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                Общих друзей: {rec.mutual_friends}
+                              </Typography>
+                              <Button
+                                fullWidth
+                                variant="contained"
+                                startIcon={<PersonAddIcon />}
+                                onClick={() => sendRequestFromRecommendation(rec.user_id)}
+                                disabled={sendingRequest === rec.user_id}
+                              >
+                                {sendingRequest === rec.user_id ? 'Отправка...' : 'Добавить в друзья'}
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
                 </Box>
               )}
             </>

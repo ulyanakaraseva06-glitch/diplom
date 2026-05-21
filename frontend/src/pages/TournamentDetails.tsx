@@ -30,7 +30,7 @@ interface Match {
 const TournamentDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isManager } = useAuth();
+  const { canManageTournaments, isOrganizer } = useAuth();
   const [tournament, setTournament] = useState<TournamentWithParticipants | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -546,9 +546,14 @@ const resetWinner = (matchId: string) => {
   <Container maxWidth="xl">
     <Box sx={{ mt: 4, mb: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/tournaments')}>Назад к турнирам</Button>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate(isOrganizer ? '/my-tournaments' : '/tournaments')}
+        >
+          {isOrganizer ? 'Назад к моим турнирам' : 'Назад к турнирам'}
+        </Button>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          {isManager && (
+          {canManageTournaments && (
             <Button 
               variant="outlined" 
               startIcon={<SaveIcon />} 
@@ -558,7 +563,7 @@ const resetWinner = (matchId: string) => {
               {saving ? 'Сохранение...' : 'Сохранить сетку'}
             </Button>
           )}
-          {isManager && (
+          {canManageTournaments && (
             <Button variant={isEditMode ? "contained" : "outlined"} startIcon={<EditIcon />} onClick={toggleEditMode} color={isEditMode ? "success" : "primary"}>
               {isEditMode ? "Режим редактирования (Вкл)" : "Включить режим редактирования"}
             </Button>

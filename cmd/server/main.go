@@ -11,6 +11,7 @@ import (
 	"esports-manager/internal/handlers"
 	"esports-manager/internal/middleware"
 	"esports-manager/internal/mongo"
+	"esports-manager/internal/neo4j"
 	"esports-manager/internal/repository"
 	"esports-manager/internal/services"
 	"esports-manager/internal/utils"
@@ -63,15 +64,24 @@ func main() {
         mongoDatabase = mongoClient.Database
     }
 
+    var neo4jClient *neo4j.Neo4jClient
+    neoClient, neoErr := neo4j.NewNeo4jClient(cfg.Neo4jURI, cfg.Neo4jUsername, cfg.Neo4jPassword, cfg.Neo4jDatabase)
+    if neoErr != nil {
+        log.Printf("Warning: Neo4j unavailable: %v", neoErr)
+    } else {
+        neo4jClient = neoClient
+        defer neo4jClient.Close()
+    }
+
     logRepo := repository.NewManagerLogRepository(database)
     // Инициализация хендлеров
-    authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, cfg.JWTSecret)
+    authHandler := handlers.NewAuthHandler(userRepo, banRepo, syncService, mongoDatabase, neo4jClient, cfg.JWTSecret)
     tournamentHandler := handlers.NewTournamentHandler(tournamentRepo, userRepo, registrationRepo, bracketRepo, logRepo)  // ← теперь logRepo существует
     registrationHandler := handlers.NewRegistrationHandler(registrationRepo, tournamentRepo, userRepo)
     banHandler := handlers.NewBanHandler(banRepo, userRepo, supportRepo, logRepo)  // ← теперь logRepo существует
     supportHandler := handlers.NewSupportHandler(supportRepo, userRepo, cfg.JWTSecret)
     userHandler := handlers.NewUserHandler(userRepo)
-    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, supportHandler, tournamentRepo, registrationRepo, banRepo)
+    clientHandler := handlers.NewClientHandler(mongoDatabase, userRepo, supportRepo, supportHandler, tournamentRepo, registrationRepo, banRepo, neo4jClient)
     uploadHandler := handlers.NewUploadHandler()
     calendarRepo := repository.NewCalendarRepository(database)
     calendarHandler := handlers.NewCalendarHandler(calendarRepo, tournamentRepo)
@@ -114,6 +124,8 @@ func main() {
     api.HandleFunc("/client/friends/request", clientHandler.SendFriendRequest).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/friends/respond", clientHandler.RespondFriendRequest).Methods("POST", "OPTIONS")
     api.HandleFunc("/client/friends/{id:[0-9]+}", clientHandler.RemoveFriend).Methods("DELETE", "OPTIONS")
+    api.HandleFunc("/client/recommendations", clientHandler.GetRecommendations).Methods("GET", "OPTIONS")
+    api.HandleFunc("/client/recommendations/team-members", clientHandler.GetTeamRecommendations).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/users", clientHandler.ListPlayers).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/users/{id:[0-9]+}/profile", clientHandler.GetPublicProfile).Methods("GET", "OPTIONS")
     api.HandleFunc("/client/notifications", clientHandler.GetNotifications).Methods("GET", "OPTIONS")

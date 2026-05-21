@@ -11,6 +11,7 @@ import (
 
 	"esports-manager/internal/middleware"
 	"esports-manager/internal/models"
+	"esports-manager/internal/neo4j"
 	"esports-manager/internal/repository"
 	"esports-manager/internal/services"
 
@@ -25,6 +26,7 @@ type AuthHandler struct {
 	banRepo     *repository.BanRepository
 	syncService *services.SyncService
 	mongoDB     *mongo.Database
+	neo4jClient *neo4j.Neo4jClient
 	jwtSecret   []byte
 }
 
@@ -33,6 +35,7 @@ func NewAuthHandler(
 	banRepo *repository.BanRepository,
 	syncService *services.SyncService,
 	mongoDB *mongo.Database,
+	neo4jClient *neo4j.Neo4jClient,
 	jwtSecret string,
 ) *AuthHandler {
 	return &AuthHandler{
@@ -40,6 +43,7 @@ func NewAuthHandler(
 		banRepo:     banRepo,
 		syncService: syncService,
 		mongoDB:     mongoDB,
+		neo4jClient: neo4jClient,
 		jwtSecret:   []byte(jwtSecret),
 	}
 }
@@ -154,6 +158,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
             log.Printf("Register: failed to sync user %d to MongoDB: %v", user.ID, err)
         }
     }
+
+    SyncUserProfileToNeo4j(r.Context(), h.neo4jClient, h.userRepo, h.mongoDB, user.ID, nil)
 
     // Генерация JWT токена
     token, err := h.generateToken(user.ID, user.Role)
