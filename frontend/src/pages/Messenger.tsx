@@ -25,11 +25,49 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import NavBar from '../components/NavBar';
 import EmojiPicker from '../components/EmojiPicker';
+import ChatSenderHeader from '../components/ChatSenderHeader';
+import ChatMessageImage from '../components/ChatMessageImage';
 import { clientApi, ChatPreview, ChatMessage } from '../api/clientApi';
+import { useAuth } from '../contexts/AuthContext';
 import { mediaUrl } from '../utils/media';
 import { confirmDelete } from '../utils/confirmDelete';
+import { messageBubbleSx, chatMetaSx, chatMessageColumnSx } from '../utils/chatStyles';
+
+function shouldShowSender(msg: ChatMessage, chat: ChatPreview | null): boolean {
+  if (!chat) return false;
+  if (chat.is_team) return true;
+  if (chat.is_support) return !msg.from_me;
+  return !msg.from_me;
+}
+
+function resolveSender(
+  msg: ChatMessage,
+  chat: ChatPreview | null,
+  me: { username?: string; email?: string; avatar_url?: string } | null
+) {
+  if (msg.from_me && me) {
+    return {
+      username: msg.username || me.username || 'Вы',
+      email: msg.email || me.email,
+      avatarUrl: msg.avatar_url || me.avatar_url,
+    };
+  }
+  if (chat?.is_support && !msg.from_me) {
+    return {
+      username: msg.username || 'Поддержка',
+      email: msg.email,
+      avatarUrl: msg.avatar_url,
+    };
+  }
+  return {
+    username: msg.username || chat?.username || 'Пользователь',
+    email: msg.email,
+    avatarUrl: msg.avatar_url || chat?.avatar_url,
+  };
+}
 
 const Messenger: React.FC = () => {
+  const { user } = useAuth();
   const location = useLocation();
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [chatSearch, setChatSearch] = useState('');
@@ -227,39 +265,51 @@ const Messenger: React.FC = () => {
                     {loading ? (
                       <CircularProgress size={32} />
                     ) : (
-                      (messages ?? []).map((msg) => (
-                        <Box
-                          key={String(msg.id)}
-                          sx={{ display: 'flex', justifyContent: msg.from_me ? 'flex-end' : 'flex-start', mb: 1.5 }}
-                        >
-                          <Paper
+                      (messages ?? []).map((msg) => {
+                        const showSender = shouldShowSender(msg, selected);
+                        const sender = resolveSender(msg, selected, user);
+                        return (
+                          <Box
+                            key={String(msg.id)}
                             sx={{
-                              p: 1.5,
-                              maxWidth: '70%',
-                              bgcolor: msg.from_me ? 'primary.main' : 'grey.100',
-                              color: msg.from_me ? 'primary.contrastText' : 'text.primary',
+                              display: 'flex',
+                              justifyContent: msg.from_me ? 'flex-end' : 'flex-start',
+                              mb: 1.5,
                             }}
                           >
-                            {!msg.from_me && msg.username && selected.is_team && (
-                              <Typography variant="caption" sx={{ fontWeight: 700, display: 'block' }}>
-                                {msg.username}
-                              </Typography>
-                            )}
-                            {msg.text && <Typography variant="body2">{msg.text}</Typography>}
-                            {msg.image_url && (
-                              <Box
-                                component="img"
-                                src={mediaUrl(msg.image_url)}
-                                alt="вложение"
-                                sx={{ maxWidth: '100%', borderRadius: 1, mt: msg.text ? 1 : 0 }}
-                              />
-                            )}
-                            <Typography variant="caption" sx={{ opacity: 0.8, display: 'block', mt: 0.5 }}>
-                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </Typography>
-                          </Paper>
-                        </Box>
-                      ))
+                            <Box sx={chatMessageColumnSx(msg.from_me)}>
+                              {showSender && (
+                                <ChatSenderHeader
+                                  username={sender.username}
+                                  email={sender.email}
+                                  avatarUrl={sender.avatarUrl}
+                                  align={msg.from_me ? 'right' : 'left'}
+                                />
+                              )}
+                              <Paper sx={messageBubbleSx(msg.from_me)}>
+                                {msg.text && (
+                                  <Typography variant="body2" sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                                    {msg.text}
+                                  </Typography>
+                                )}
+                                {msg.image_url && (
+                                  <ChatMessageImage
+                                    imageUrl={msg.image_url}
+                                    fromMe={msg.from_me}
+                                    hasText={!!msg.text}
+                                  />
+                                )}
+                                <Typography variant="caption" sx={chatMetaSx(msg.from_me)}>
+                                  {new Date(msg.created_at).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </Typography>
+                              </Paper>
+                            </Box>
+                          </Box>
+                        );
+                      })
                     )}
                     <div ref={bottomRef} />
                   </Box>

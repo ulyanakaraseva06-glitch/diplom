@@ -96,6 +96,18 @@ func parseClientTournamentFilter(r *http.Request) repository.ClientTournamentFil
 		b := v == "true" || v == "1"
 		f.IsVIP = &b
 	}
+	if r.URL.Query().Get("home") == "1" {
+		f.Limit = 3
+		f.SortByLatest = true
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			f.Limit = n
+		}
+	}
+	if r.URL.Query().Get("sort") == "latest" {
+		f.SortByLatest = true
+	}
 	return f
 }
 
@@ -196,6 +208,13 @@ func (h *ClientHandler) RegisterForTournament(w http.ResponseWriter, r *http.Req
 			return
 		}
 		teamName = team.Name
+		if existing, err := h.registrationRepo.FindByTournamentAndTeamName(r.Context(), req.TournamentID, teamName); err != nil {
+			http.Error(w, "Database error", http.StatusInternalServerError)
+			return
+		} else if existing != nil {
+			http.Error(w, "Эта команда уже подала заявку на турнир", http.StatusConflict)
+			return
+		}
 	}
 	if teamName == "" {
 		u, _ := h.userRepo.FindByID(r.Context(), userID)
@@ -291,8 +310,14 @@ func (h *ClientHandler) ListRegistrationApplications(w http.ResponseWriter, r *h
 	}
 
 	status := models.RegistrationStatus(r.URL.Query().Get("status"))
+	tournamentID := 0
+	if v := r.URL.Query().Get("tournament_id"); v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			tournamentID = id
+		}
+	}
 	all := role == "manager"
-	apps, err := h.registrationRepo.ListApplications(r.Context(), userID, all, status)
+	apps, err := h.registrationRepo.ListApplications(r.Context(), userID, all, status, tournamentID)
 	if err != nil {
 		http.Error(w, "Failed to list applications", http.StatusInternalServerError)
 		return

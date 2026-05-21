@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -32,25 +32,26 @@ import Papa from 'papaparse';
 import { useAuth } from '../contexts/AuthContext';
 import { registrationsApi } from '../api/registrations';
 import { tournamentsApi } from '../api/tournaments';
-import { Registration, Tournament } from '../types';
+import { clientApi, TournamentApplication } from '../api/clientApi';
+import { Tournament } from '../types';
 
-const RegistrationStatusChip: React.FC<{ status: Registration['status'] }> = ({ status }) => {
-  const statusMap = {
-    pending: { label: 'Ожидает', color: 'warning' as const },
-    approved: { label: 'Одобрена', color: 'success' as const },
-    rejected: { label: 'Отклонена', color: 'error' as const },
+const RegistrationStatusChip: React.FC<{ status: string }> = ({ status }) => {
+  const statusMap: Record<string, { label: string; color: 'warning' | 'success' | 'error' | 'default' }> = {
+    pending: { label: 'Ожидает', color: 'warning' },
+    approved: { label: 'Одобрена', color: 'success' },
+    rejected: { label: 'Отклонена', color: 'error' },
   };
-  const { label, color } = statusMap[status];
+  const { label, color } = statusMap[status] || { label: status, color: 'default' as const };
   return <Chip label={label} color={color} size="small" />;
 };
 
-const PaymentStatusChip: React.FC<{ status: Registration['payment_status'] }> = ({ status }) => {
-  const statusMap = {
-    pending: { label: 'Ожидает оплаты', color: 'warning' as const },
-    paid: { label: 'Оплачено', color: 'success' as const },
-    refunded: { label: 'Возвращено', color: 'default' as const },
+const PaymentStatusChip: React.FC<{ status: string }> = ({ status }) => {
+  const statusMap: Record<string, { label: string; color: 'warning' | 'success' | 'default' }> = {
+    pending: { label: 'Ожидает оплаты', color: 'warning' },
+    paid: { label: 'Оплачено', color: 'success' },
+    refunded: { label: 'Возвращено', color: 'default' },
   };
-  const { label, color } = statusMap[status];
+  const { label, color } = statusMap[status] || { label: status, color: 'default' as const };
   return <Chip label={label} color={color} size="small" variant="outlined" />;
 };
 
@@ -58,123 +59,107 @@ const Registrations: React.FC = () => {
   const { isManager, isOrganizer } = useAuth();
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedTournamentId, setSelectedTournamentId] = useState<number | null>(null);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<number | ''>('');
+  const [applications, setApplications] = useState<TournamentApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  
-  // Пагинация
+  const [filterStatus, setFilterStatus] = useState('pending');
+
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // Загрузка списка турниров
   useEffect(() => {
     const loadTournaments = async () => {
       try {
         const response = await tournamentsApi.getAll();
         setTournaments(response.data || []);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Ошибка загрузки турниров');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Ошибка загрузки турниров';
+        setError(msg);
       }
     };
     loadTournaments();
   }, []);
 
-  // Загрузка заявок при выборе турнира или изменении фильтра
-  useEffect(() => {
-    if (!selectedTournamentId) {
-      setRegistrations([]);
-      return;
+  const loadApplications = useCallback(async () => {
+    try {
+      setLoading(true);
+      const tournamentId =
+        selectedTournamentId === '' ? undefined : Number(selectedTournamentId);
+      const list = await clientApi.getRegistrationApplications(filterStatus, tournamentId);
+      setApplications(list);
+      setError('');
+      setPage(0);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка загрузки заявок';
+      setError(msg);
+      setApplications([]);
+    } finally {
+      setLoading(false);
     }
-    
-    const loadRegistrations = async () => {
-      try {
-        setLoading(true);
-        const params: any = {};
-        if (filterStatus) params.status = filterStatus;
-        const response = await registrationsApi.getByTournament(selectedTournamentId, params);
-        setRegistrations(response.data || []);
-        setError('');
-        setPage(0);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Ошибка загрузки заявок');
-        setRegistrations([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadRegistrations();
-  }, [selectedTournamentId, filterStatus]);
+  }, [filterStatus, selectedTournamentId]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
 
   const handleApprove = async (id: number) => {
     try {
       await registrationsApi.approve(id);
-      if (selectedTournamentId) {
-        const params: any = {};
-        if (filterStatus) params.status = filterStatus;
-        const response = await registrationsApi.getByTournament(selectedTournamentId, params);
-        setRegistrations(response.data || []);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка подтверждения заявки');
+      await loadApplications();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка подтверждения заявки';
+      setError(msg);
     }
   };
 
   const handleReject = async (id: number) => {
     try {
       await registrationsApi.reject(id);
-      if (selectedTournamentId) {
-        const params: any = {};
-        if (filterStatus) params.status = filterStatus;
-        const response = await registrationsApi.getByTournament(selectedTournamentId, params);
-        setRegistrations(response.data || []);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Ошибка отклонения заявки');
+      await loadApplications();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка отклонения заявки';
+      setError(msg);
     }
   };
 
   const exportToCSV = () => {
-    if (!registrations || registrations.length === 0) {
+    if (!applications.length) {
       alert('Нет данных для экспорта');
       return;
     }
 
-    const tournamentTitle = tournaments.find(t => t.id === selectedTournamentId)?.title || 'Турнир';
-    
-    const exportData = registrations.map(reg => ({
-      'ID': reg.id,
-      'Турнир': tournamentTitle,
-      'Команда': reg.team_name,
-      'Игрок': reg.username || reg.user_id,
-      'Email': reg.email,
-      'Статус заявки': reg.status === 'pending' ? 'Ожидает' : 
-                       reg.status === 'approved' ? 'Одобрена' : 'Отклонена',
-      'Статус оплаты': reg.payment_status === 'pending' ? 'Ожидает оплаты' :
-                       reg.payment_status === 'paid' ? 'Оплачено' : 'Возвращено',
+    const exportData = applications.map((reg) => ({
+      ID: reg.id,
+      Турнир: reg.tournament_title,
+      Команда: reg.team_name,
+      Игрок: reg.username || reg.user_id,
+      Email: reg.email,
+      Организатор: reg.organizer_username,
+      'Статус заявки':
+        reg.status === 'pending' ? 'Ожидает' : reg.status === 'approved' ? 'Одобрена' : 'Отклонена',
+      'Статус оплаты':
+        reg.payment_status === 'pending'
+          ? 'Ожидает оплаты'
+          : reg.payment_status === 'paid'
+            ? 'Оплачено'
+            : 'Возвращено',
       'Дата регистрации': new Date(reg.registered_at).toLocaleString(),
     }));
 
     const csv = Papa.unparse(exportData);
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.setAttribute('download', `заявки_турнир_${selectedTournamentId}_${new Date().toISOString().slice(0, 19)}.csv`);
+    link.setAttribute(
+      'download',
+      `заявки_${selectedTournamentId || 'все'}_${new Date().toISOString().slice(0, 19)}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
-
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
   };
 
   if (!isManager && !isOrganizer) {
@@ -187,16 +172,15 @@ const Registrations: React.FC = () => {
     );
   }
 
-  // Пагинированные данные
-  const paginatedRegistrations = registrations.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const paginated = applications.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4">Модерация заявок на турниры</Typography>
+          <Typography variant="h4">Заявки от участников</Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            {selectedTournamentId && registrations.length > 0 && (
+            {applications.length > 0 && (
               <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportToCSV}>
                 Экспорт CSV
               </Button>
@@ -207,6 +191,13 @@ const Registrations: React.FC = () => {
           </Box>
         </Box>
 
+        {isManager && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Здесь отображаются все заявки игроков и команд, в том числе поданные лидером команды. Фильтр по
+            турниру необязателен.
+          </Alert>
+        )}
+
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
             {error}
@@ -216,16 +207,19 @@ const Registrations: React.FC = () => {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid size={{ xs: 12, md: 6 }}>
             <FormControl fullWidth>
-              <InputLabel>Выберите турнир</InputLabel>
+              <InputLabel>Турнир (фильтр)</InputLabel>
               <Select
-                value={selectedTournamentId || ''}
-                onChange={(e) => setSelectedTournamentId(Number(e.target.value) || null)}
-                label="Выберите турнир"
+                value={selectedTournamentId === '' ? '' : String(selectedTournamentId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSelectedTournamentId(v === '' ? '' : Number(v));
+                }}
+                label="Турнир (фильтр)"
               >
-                <MenuItem value="">-- Выберите турнир --</MenuItem>
-                {tournaments && tournaments.map((t) => (
+                <MenuItem value="">Все турниры</MenuItem>
+                {tournaments.map((t) => (
                   <MenuItem key={t.id} value={t.id}>
-                    {t.title} ({t.game}) - {new Date(t.start_date).toLocaleDateString()}
+                    {t.title} ({t.game}) — {new Date(t.start_date).toLocaleDateString()}
                   </MenuItem>
                 ))}
               </Select>
@@ -249,87 +243,90 @@ const Registrations: React.FC = () => {
           </Grid>
         </Grid>
 
-        {selectedTournamentId && (
+        {loading ? (
+          <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : applications.length === 0 ? (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography color="text.secondary">Нет заявок по выбранным фильтрам</Typography>
+          </Paper>
+        ) : (
           <>
-            {loading ? (
-              <Box display="flex" justifyContent="center" sx={{ mt: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : !registrations || registrations.length === 0 ? (
-              <Paper sx={{ p: 3, textAlign: 'center' }}>
-                <Typography color="text.secondary">Нет заявок на этот турнир</Typography>
-              </Paper>
-            ) : (
-              <>
-                <TableContainer component={Paper}>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>ID</TableCell>
-                        <TableCell>Команда</TableCell>
-                        <TableCell>Игрок</TableCell>
-                        <TableCell>Email</TableCell>
-                        <TableCell>Статус заявки</TableCell>
-                        <TableCell>Оплата</TableCell>
-                        <TableCell>Дата регистрации</TableCell>
-                        <TableCell>Действия</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {paginatedRegistrations.map((reg) => (
-                        <TableRow key={reg.id}>
-                          <TableCell>{reg.id}</TableCell>
-                          <TableCell>{reg.team_name}</TableCell>
-                          <TableCell>{reg.username || reg.user_id}</TableCell>
-                          <TableCell>{reg.email}</TableCell>
-                          <TableCell>
-                            <RegistrationStatusChip status={reg.status} />
-                          </TableCell>
-                          <TableCell>
-                            <PaymentStatusChip status={reg.payment_status} />
-                          </TableCell>
-                          <TableCell>{new Date(reg.registered_at).toLocaleString()}</TableCell>
-                          <TableCell>
-                            {reg.status === 'pending' && (
-                              <>
-                                <Button
-                                  size="small"
-                                  color="success"
-                                  startIcon={<ApproveIcon />}
-                                  onClick={() => handleApprove(reg.id)}
-                                  sx={{ mr: 1 }}
-                                >
-                                  Одобрить
-                                </Button>
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  startIcon={<RejectIcon />}
-                                  onClick={() => handleReject(reg.id)}
-                                >
-                                  Отклонить
-                                </Button>
-                              </>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TablePagination
-                  rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                  component="div"
-                  count={registrations.length}
-                  rowsPerPage={rowsPerPage}
-                  page={page}
-                  onPageChange={handleChangePage}
-                  onRowsPerPageChange={handleChangeRowsPerPage}
-                  labelRowsPerPage="Записей на странице:"
-                  labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
-                />
-              </>
-            )}
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Турнир</TableCell>
+                    {isManager && <TableCell>Организатор</TableCell>}
+                    <TableCell>Команда</TableCell>
+                    <TableCell>Игрок (лидер)</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Статус</TableCell>
+                    <TableCell>Оплата</TableCell>
+                    <TableCell>Дата</TableCell>
+                    <TableCell>Действия</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginated.map((reg) => (
+                    <TableRow key={reg.id}>
+                      <TableCell>{reg.id}</TableCell>
+                      <TableCell>{reg.tournament_title}</TableCell>
+                      {isManager && <TableCell>{reg.organizer_username}</TableCell>}
+                      <TableCell>{reg.team_name}</TableCell>
+                      <TableCell>{reg.username}</TableCell>
+                      <TableCell>{reg.email}</TableCell>
+                      <TableCell>
+                        <RegistrationStatusChip status={reg.status} />
+                      </TableCell>
+                      <TableCell>
+                        <PaymentStatusChip status={reg.payment_status} />
+                      </TableCell>
+                      <TableCell>{new Date(reg.registered_at).toLocaleString('ru-RU')}</TableCell>
+                      <TableCell>
+                        {reg.status === 'pending' && (
+                          <>
+                            <Button
+                              size="small"
+                              color="success"
+                              startIcon={<ApproveIcon />}
+                              onClick={() => handleApprove(reg.id)}
+                              sx={{ mr: 1 }}
+                            >
+                              Одобрить
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              startIcon={<RejectIcon />}
+                              onClick={() => handleReject(reg.id)}
+                            >
+                              Отклонить
+                            </Button>
+                          </>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            <TablePagination
+              rowsPerPageOptions={[5, 10, 25, 50, 100]}
+              component="div"
+              count={applications.length}
+              rowsPerPage={rowsPerPage}
+              page={page}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              labelRowsPerPage="Записей на странице:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} из ${count}`}
+            />
           </>
         )}
       </Box>

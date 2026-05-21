@@ -131,6 +131,8 @@ export interface SupportMessage {
   is_read: boolean;
   created_at: string;
   username?: string;
+  email?: string;
+  avatar_url?: string;
 }
 
 export interface SupportMessageCreate {

@@ -54,8 +54,24 @@ type PayTarget = { sub: Subscription };
 type SubKind = 'personal' | 'team';
 
 function getSubKind(sub: UserSubscription): SubKind {
-  if (sub.source === 'team' || sub.team_id || sub.target_type === 'team') return 'team';
+  if (
+    sub.source === 'team' ||
+    sub.team_id ||
+    sub.target_type === 'team' ||
+    sub.subscription_id === 'sub_team'
+  ) {
+    return 'team';
+  }
   return 'personal';
+}
+
+function canCancelSubscription(userSub: UserSubscription, leaderTeams: Team[]): boolean {
+  if (userSub.can_cancel) return true;
+  if (getSubKind(userSub) !== 'team') return false;
+  if (!userSub.team_id) {
+    return leaderTeams.length > 0;
+  }
+  return leaderTeams.some((t) => t.id === userSub.team_id);
 }
 
 function sortActiveSubs(subs: UserSubscription[]): UserSubscription[] {
@@ -80,6 +96,8 @@ const SubscriptionPage: React.FC = () => {
   const [leaderTeams, setLeaderTeams] = useState<Team[]>([]);
   const [confirmTarget, setConfirmTarget] = useState<PayTarget | null>(null);
   const [confirmTeamId, setConfirmTeamId] = useState('');
+  const [cancelTarget, setCancelTarget] = useState<UserSubscription | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   const fetchSubscriptions = useCallback(async () => {
@@ -184,8 +202,9 @@ const SubscriptionPage: React.FC = () => {
     }
   };
 
-  const handleCancelSubscription = async (sub: UserSubscription) => {
-    if (!window.confirm('Отменить эту подписку?')) return;
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:8080/api/subscriptions/cancel', {
@@ -194,11 +213,19 @@ const SubscriptionPage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ user_subscription_id: sub.id }),
+        body: JSON.stringify({ user_subscription_id: cancelTarget.id }),
       });
 
       if (response.ok) {
-        setSuccessMsg('Подписка отменена');
+        let msg = 'Подписка отменена';
+        try {
+          const data = await response.json();
+          if (data?.message) msg = data.message;
+        } catch {
+          /* ignore */
+        }
+        setCancelTarget(null);
+        setSuccessMsg(msg);
         await fetchUserSubscription();
       } else {
         const text = await response.text();
@@ -206,6 +233,8 @@ const SubscriptionPage: React.FC = () => {
       }
     } catch {
       setError('Ошибка отмены подписки');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -327,17 +356,17 @@ const SubscriptionPage: React.FC = () => {
                           ? 'VIP, смена никнейма и бонусы доступны как участнику команды с подпиской.'
                           : 'VIP, смена никнейма и бонусы по вашей личной подписке.'}
                       </Typography>
-                      {isTeam && !userSub.can_cancel && (
+                      {isTeam && !canCancelSubscription(userSub, leaderTeams) && (
                         <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 1 }}>
                           Отменить может только лидер команды
                         </Typography>
                       )}
-                      {userSub.can_cancel && (
+                      {canCancelSubscription(userSub, leaderTeams) && (
                         <Button
                           variant="outlined"
                           color="error"
                           size="small"
-                          onClick={() => handleCancelSubscription(userSub)}
+                          onClick={() => setCancelTarget(userSub)}
                           sx={{ mt: 1.5 }}
                         >
                           Отменить {isTeam ? 'командную' : 'личную'} подписку
@@ -503,6 +532,41 @@ const SubscriptionPage: React.FC = () => {
           )}
         </Box>
       </Container>
+
+      <Dialog
+        open={!!cancelTarget}
+        onClose={() => !cancelling && setCancelTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Отмена подписки</DialogTitle>
+        <DialogContent>
+          <Typography>Уверены ли вы, что хотите удалить?</Typography>
+          {cancelTarget && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {getSubKind(cancelTarget) === 'team'
+                  ? `Командная подписка «${cancelTarget.team_name || cancelTarget.subscription_name || 'команда'}»`
+                  : `Личная подписка «${cancelTarget.subscription_name || 'игрок'}»`}
+              </Typography>
+              {getSubKind(cancelTarget) === 'team' && (
+                <Typography variant="body2" color="warning.main" sx={{ mt: 1.5 }}>
+                  Подписка будет отменена для всех участников команды. VIP и бонусы команды перестанут действовать у
+                  каждого игрока.
+                </Typography>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelTarget(null)} disabled={cancelling}>
+            Нет
+          </Button>
+          <Button variant="contained" color="error" onClick={handleConfirmCancel} disabled={cancelling}>
+            {cancelling ? 'Отмена...' : 'Да, удалить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!confirmTarget} onClose={() => !subscribing && setConfirmTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Подтверждение оплаты</DialogTitle>

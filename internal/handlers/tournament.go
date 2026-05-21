@@ -150,7 +150,7 @@ func (h *TournamentHandler) ListTournaments(w http.ResponseWriter, r *http.Reque
     // Получаем параметры фильтрации из query
     game := r.URL.Query().Get("game")
     status := r.URL.Query().Get("status")
-    limit := 20
+    limit := 500
     offset := 0
 
     if l := r.URL.Query().Get("limit"); l != "" {

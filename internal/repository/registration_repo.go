@@ -77,6 +77,32 @@ func (r *RegistrationRepository) FindByID(ctx context.Context, id int) (*models.
     return &registration, nil
 }
 
+// FindByTournamentAndTeamName — заявка команды на турнир (по имени команды)
+func (r *RegistrationRepository) FindByTournamentAndTeamName(ctx context.Context, tournamentID int, teamName string) (*models.TournamentRegistration, error) {
+	if teamName == "" {
+		return nil, nil
+	}
+	query := `
+        SELECT id, tournament_id, user_id, team_name, status, payment_status, registered_at, approved_by, approved_at
+        FROM tournament_registrations
+        WHERE tournament_id = $1 AND LOWER(TRIM(team_name)) = LOWER(TRIM($2))
+        LIMIT 1
+    `
+	var registration models.TournamentRegistration
+	err := r.db.Pool.QueryRow(ctx, query, tournamentID, teamName).Scan(
+		&registration.ID, &registration.TournamentID, &registration.UserID,
+		&registration.TeamName, &registration.Status, &registration.PaymentStatus,
+		&registration.RegisteredAt, &registration.ApprovedBy, &registration.ApprovedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find registration by team: %w", err)
+	}
+	return &registration, nil
+}
+
 // FindByTournamentAndUser - поиск заявки по турниру и пользователю
 func (r *RegistrationRepository) FindByTournamentAndUser(ctx context.Context, tournamentID, userID int) (*models.TournamentRegistration, error) {
     query := `
@@ -106,12 +132,17 @@ func (r *RegistrationRepository) ListByTournament(ctx context.Context, tournamen
     query := `
         SELECT id, tournament_id, user_id, team_name, status, payment_status, registered_at, approved_by, approved_at
         FROM tournament_registrations
-        WHERE tournament_id = $1 AND ($2 = '' OR status = $2)
+        WHERE tournament_id = $1
+          AND ($2::text IS NULL OR status::text = $2::text)
         ORDER BY registered_at
         LIMIT $3 OFFSET $4
     `
 
-    rows, err := r.db.Pool.Query(ctx, query, tournamentID, status, limit, offset)
+    var statusArg interface{}
+    if status != "" {
+        statusArg = string(status)
+    }
+    rows, err := r.db.Pool.Query(ctx, query, tournamentID, statusArg, limit, offset)
     if err != nil {
         return nil, fmt.Errorf("failed to list registrations: %w", err)
     }
@@ -314,7 +345,7 @@ type RegistrationApplication struct {
 }
 
 // ListApplications — заявки для организатора (свои турниры) или менеджера (все)
-func (r *RegistrationRepository) ListApplications(ctx context.Context, organizerID int, allOrganizers bool, status models.RegistrationStatus) ([]RegistrationApplication, error) {
+func (r *RegistrationRepository) ListApplications(ctx context.Context, organizerID int, allOrganizers bool, status models.RegistrationStatus, tournamentID int) ([]RegistrationApplication, error) {
     query := `
         SELECT r.id, r.tournament_id, t.title, t.organizer_id, ou.username,
                r.user_id, u.username, u.email, r.team_name, r.status, r.payment_status, r.registered_at
@@ -322,11 +353,16 @@ func (r *RegistrationRepository) ListApplications(ctx context.Context, organizer
         JOIN tournaments t ON t.id = r.tournament_id
         JOIN users u ON u.id = r.user_id
         JOIN users ou ON ou.id = t.organizer_id
-        WHERE ($1 = '' OR r.status = $1)
+        WHERE ($1::text IS NULL OR r.status::text = $1::text)
           AND ($2 = TRUE OR t.organizer_id = $3)
+          AND ($4 = 0 OR r.tournament_id = $4)
         ORDER BY r.registered_at DESC
     `
-    rows, err := r.db.Pool.Query(ctx, query, status, allOrganizers, organizerID)
+    var statusArg interface{}
+    if status != "" {
+        statusArg = string(status)
+    }
+    rows, err := r.db.Pool.Query(ctx, query, statusArg, allOrganizers, organizerID, tournamentID)
     if err != nil {
         return nil, fmt.Errorf("failed to list applications: %w", err)
     }

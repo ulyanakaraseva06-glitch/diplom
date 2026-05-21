@@ -137,10 +137,14 @@ const ClientTournaments: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const tournamentsUrl =
+      isOrganizer || isManager
+        ? `${API}/api/client/tournaments`
+        : `${API}/api/client/tournaments?home=1`;
 
     (async () => {
       try {
-        const tRes = await fetch(`${API}/api/client/tournaments`);
+        const tRes = await fetch(tournamentsUrl);
         if (!tRes.ok) {
           const detail = await tRes.text();
           throw new Error(detail || `HTTP ${tRes.status}`);
@@ -163,31 +167,37 @@ const ClientTournaments: React.FC = () => {
       }
     })();
 
-    if (showNews) {
-      (async () => {
-        setNewsLoading(true);
-        try {
-          const nRes = await fetch(`${API}/api/client/news`);
-          if (nRes.ok) {
-            const nData = await nRes.json();
-            if (!cancelled) {
-              setNews(Array.isArray(nData) ? nData.slice(0, 3) : []);
-            }
+    const loadNews = async () => {
+      setNewsLoading(true);
+      try {
+        const nRes = await fetch(`${API}/api/client/news`);
+        if (nRes.ok) {
+          const nData = await nRes.json();
+          if (!cancelled) {
+            setNews(Array.isArray(nData) ? nData.slice(0, 3) : []);
           }
-        } catch {
-          /* новости не блокируют страницу */
-        } finally {
-          if (!cancelled) setNewsLoading(false);
         }
-      })();
-    } else if (!cancelled) {
-      setNewsLoading(false);
+      } catch {
+        /* новости не блокируют страницу */
+      } finally {
+        if (!cancelled) setNewsLoading(false);
+      }
+    };
+
+    if (showNews) {
+      loadNews();
+      const newsTimer = window.setInterval(loadNews, 5 * 60 * 1000);
+      return () => {
+        cancelled = true;
+        window.clearInterval(newsTimer);
+      };
     }
 
+    if (!cancelled) setNewsLoading(false);
     return () => {
       cancelled = true;
     };
-  }, [showNews]);
+  }, [showNews, isOrganizer, isManager]);
 
   useEffect(() => {
     loadMyRegs();
@@ -224,7 +234,7 @@ const ClientTournaments: React.FC = () => {
   };
 
   const canRegister = isClientUser;
-  const displayTournaments = staffHome ? tournaments : tournaments.slice(0, 5);
+  const displayTournaments = staffHome ? tournaments : tournaments.slice(0, 3);
   const selectedReg = selected ? myRegForTournament(myRegs, selected.id) : undefined;
 
   return (
@@ -411,9 +421,9 @@ const ClientTournaments: React.FC = () => {
                 <EmojiEventsIcon color="primary" />
                 Турниры
               </Typography>
-              {isClientUser && (
+              {!staffHome && (
                 <Button variant="outlined" onClick={() => navigate('/client/all-tournaments')}>
-                  Открыть все
+                  Все турниры
                 </Button>
               )}
             </Box>
